@@ -115,6 +115,16 @@ Local DMG builds are suitable for testing, but public macOS releases should be s
 
 Set up a Developer ID Application certificate and Apple notarization credentials in your release environment before publishing a public release. Electron Builder detects valid signing credentials and applies them during the packaging step.
 
+### Deploy the website with Vercel
+
+Import this repository into Vercel as a Next.js project. The public privacy-policy route is included automatically at `/privacy`.
+
+In **Vercel → Settings → Environment Variables**, set `NEXT_PUBLIC_QUIRE_WEBSITE_URL` to the final production URL, for example `https://quire.vercel.app` or your custom domain. Redeploy after changing it. The macOS app then opens that URL in the user&apos;s default browser, and the App Store privacy-policy URL will be:
+
+```text
+https://your-domain.example/privacy
+```
+
 ## Everyday workflow
 
 1. Create a blank article or report, or import an existing ZIP project.
@@ -221,6 +231,12 @@ Contributions are welcome, whether they improve a small interaction or help shap
 5. Open a pull request that explains the problem, the approach, and how you verified it.
 
 For security-sensitive issues, please do not open a public issue. Follow the reporting guidance in [SECURITY.md](SECURITY.md).
+
+## License
+
+Quire is free and open source under the [MIT License](LICENSE). You may use, copy, modify, distribute, and sell copies of the software under the license terms.
+
+The published app policy lives at the website&apos;s `/privacy` page. Until the website is deployed, the source for that page is available in [`src/app/privacy/page.tsx`](src/app/privacy/page.tsx).
 
 ## Roadmap
 

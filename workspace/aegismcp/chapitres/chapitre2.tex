@@ -1,0 +1,336 @@
+\chapter{État de l'art du projet}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+La sécurisation d'un agent IA utilisant MCP nécessite de croiser plusieurs domaines : modèles de langage, orchestration agentique, appels d'outils, récupération de connaissances, contrôle d'accès, sécurité des protocoles, Red Teaming et gouvernance du risque. Ce chapitre présente les notions retenues pour AegisMCP et met l'accent sur les mécanismes qui influencent directement le modèle de menace du projet.
+
+\section{Agents IA autonomes et systèmes agentiques}
+
+\subsection{Modèles de langage de grande taille}
+
+Un \textit{Large Language Model} (LLM) est un modèle entraîné sur de grands corpus afin de prédire et générer des séquences de tokens. Dans une application conversationnelle simple, son rôle peut se limiter à transformer un prompt en texte. Dans une architecture agentique, ce même modèle devient un composant de décision : il interprète un objectif, construit un plan, choisit un outil, génère les arguments de l'appel, interprète le résultat et décide de poursuivre ou de terminer la tâche.
+
+Cette évolution change la nature du risque. Une erreur de génération n'est plus seulement une réponse incorrecte : elle peut devenir une \textbf{action}. Une hallucination peut produire le nom d'une mauvaise ressource, une mauvaise interprétation peut déclencher un outil destructif, et une instruction hostile peut détourner une séquence d'actions. La sécurité doit donc distinguer la \emph{qualité du raisonnement} de l'\emph{autorisation de l'action}.
+
+Dans AegisMCP, le LLM est traité comme un moteur de proposition non fiable au sens Zero-Trust. Cette formulation ne signifie pas que le modèle est malveillant ; elle signifie que sa sortie ne suffit pas à prouver qu'une action est légitime. Le modèle peut être compétent, aligné et robuste tout en restant soumis à des erreurs, à des entrées adversariales ou à des changements de version.
+
+\subsection{Planification, boucle agentique et utilisation d'outils}
+
+Un agent à outils suit généralement une boucle similaire à la figure~\ref{fig:agent-loop}. L'utilisateur fournit un objectif. Le modèle reçoit un ensemble d'outils décrits sous forme de schémas structurés. Il peut répondre directement ou produire un appel d'outil. L'application exécute ensuite la fonction et renvoie son résultat au modèle. La boucle se poursuit jusqu'à production d'une réponse finale ou atteinte d'une condition d'arrêt. La documentation OpenRouter précise que le modèle \emph{suggère} l'appel mais que l'application exécute réellement l'outil \cite{openroutertools}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm,
+  box/.style={draw, rounded corners, minimum width=3.4cm, minimum height=0.9cm, align=center},
+  arrow/.style={-{Latex[length=2.5mm]}, thick}
+]
+\node[box] (user) {Objectif utilisateur};
+\node[box, below=of user] (llm) {LLM / planificateur};
+\node[box, below left=1.5cm and 1.8cm of llm] (answer) {Réponse finale};
+\node[box, below right=1.5cm and 1.8cm of llm] (proposal) {Appel d'outil proposé};
+\node[box, below=of proposal] (exec) {Exécution par l'application};
+\node[box, below=of exec] (result) {Résultat de l'outil};
+\draw[arrow] (user) -- (llm);
+\draw[arrow] (llm) -- node[left,sloped]{pas d'outil} (answer);
+\draw[arrow] (llm) -- node[right,sloped]{tool call} (proposal);
+\draw[arrow] (proposal) -- (exec);
+\draw[arrow] (exec) -- (result);
+\draw[arrow] (result.west) -| ([xshift=-1.2cm]llm.west) -- (llm.west);
+\end{tikzpicture}
+\caption{Boucle simplifiée d'un agent utilisant des outils}
+\label{fig:agent-loop}
+\end{figure}
+
+La frontière entre \textit{proposal} et \textit{execution} est le point stratégique d'Aegis Guard. Tant que l'appel n'a pas été exécuté, le système peut encore vérifier le contexte, refuser, réduire la portée ou demander une approbation. Une architecture qui délègue automatiquement tous les appels proposés perd cette opportunité de contrôle.
+
+\subsection{Mémoire des agents}
+
+La mémoire permet à un agent de conserver de l'information entre plusieurs étapes ou plusieurs sessions. Elle peut être éphémère, persistante, structurée ou vectorielle. Elle améliore la continuité, mais introduit un risque de \textbf{memory poisoning}. Un contenu malveillant peut être sauvegardé comme un fait ou une règle et influencer ultérieurement des tâches qui n'ont aucun lien direct avec l'attaque initiale.
+
+AegisMCP considère qu'une entrée mémoire doit posséder des métadonnées minimales : origine, niveau de confiance, date, auteur logique, durée de validité et éventuellement justification. Une mémoire issue d'un document externe ne doit pas hériter automatiquement de l'autorité d'une instruction utilisateur.
+
+\subsection{Retrieval-Augmented Generation (RAG)}
+
+Le RAG enrichit le contexte d'un LLM avec des documents retrouvés dynamiquement. Une chaîne RAG comprend typiquement l'indexation de documents, la création d'embeddings, le stockage dans une base vectorielle, une recherche par similarité et l'injection des passages sélectionnés dans le contexte du modèle.
+
+Le RAG réduit certaines hallucinations et permet d'utiliser des connaissances privées ou récentes, mais il crée une surface d'attaque supplémentaire : si le corpus contient un document empoisonné, le retriever peut le sélectionner et l'agent peut interpréter son contenu comme une instruction. Le risque ne se limite donc pas au prompt direct de l'utilisateur. La provenance du document, sa source et sa classification doivent accompagner le contenu lors de son utilisation.
+
+\subsection{Notion d'agence et moindre autonomie}
+
+Le concept d'\emph{agency} désigne ici la capacité du système à agir avec un certain degré d'autonomie. Deux agents utilisant le même modèle peuvent avoir des profils de risque très différents selon les outils disponibles. Un agent qui ne fait que rechercher de l'information publique a un rayon d'impact limité. Un agent capable d'écrire dans une base, d'envoyer des messages, d'exécuter du code et de manipuler des identités possède une agence beaucoup plus forte.
+
+AegisMCP introduit le principe de \textbf{moindre autonomie} en complément du moindre privilège. Il ne suffit pas de limiter les permissions techniques : il faut aussi limiter la capacité d'enchaîner des actions sans justification ou supervision. Une tâche de résumé ne devrait pas automatiquement disposer de droits d'envoi, d'écriture ou d'exécution de code.
+
+\section{Model Context Protocol (MCP)}
+
+\subsection{Principes et objectifs}
+
+Le Model Context Protocol est un standard ouvert pour connecter des applications IA aux systèmes dans lesquels résident leurs données et leurs outils. Un serveur MCP expose des capacités ; un client ou un host compatible peut les découvrir et les invoquer. La documentation officielle décrit MCP comme une interface standardisée entre applications IA et systèmes de données/outils \cite{mcpsdk}. Cette séparation favorise la réutilisation et l'interopérabilité : un même serveur peut être consommé par plusieurs hosts et un même host peut se connecter à plusieurs serveurs.
+
+La révision 2026-07-28 introduit une évolution importante du protocole, notamment un cœur stateless, des requêtes multi-allers-retours, le routage par en-têtes, la mise en cache de résultats de listes, un cadre d'extensions et un durcissement des mécanismes d'autorisation \cite{mcp2026}. Pour AegisMCP, l'intérêt principal n'est pas uniquement l'actualité du protocole, mais le fait qu'il formalise une frontière inter-composants qui peut être instrumentée et contrôlée.
+
+\subsection{Architecture client-serveur}
+
+Une architecture MCP typique distingue :
+
+\begin{itemize}
+    \item le \textbf{host}, c'est-à-dire l'application d'IA qui orchestre l'expérience utilisateur ;
+    \item le \textbf{client MCP}, chargé de dialoguer avec un serveur ;
+    \item le \textbf{serveur MCP}, qui expose des outils, ressources ou capacités ;
+    \item le \textbf{transport}, local ou réseau, sur lequel circulent les requêtes ;
+    \item les \textbf{systèmes cibles}, tels que fichiers, API, bases de données ou services métier.
+\end{itemize}
+
+Cette architecture crée plusieurs frontières de confiance. Un serveur local développé par l'organisation n'a pas le même niveau de confiance qu'un serveur communautaire. Un outil en lecture seule n'a pas le même impact qu'un outil d'écriture. Une ressource publique n'a pas la même sensibilité qu'un fichier restreint.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.5cm and 1.8cm,
+  box/.style={draw, rounded corners, minimum width=3.1cm, minimum height=1cm, align=center},
+  arrow/.style={-{Latex[length=2.5mm]}, thick}
+]
+\node[box] (host) {Host AegisMCP\\Agent + Guard};
+\node[box, right=of host] (client) {MCP Client / Gateway};
+\node[box, above right=0.5cm and 2cm of client] (docs) {MCP Server\\Documents};
+\node[box, right=2cm of client] (msg) {MCP Server\\Messagerie};
+\node[box, below right=0.5cm and 2cm of client] (db) {MCP Server\\Base / API};
+\draw[arrow] (host) -- (client);
+\draw[arrow] (client) -- (docs);
+\draw[arrow] (client) -- (msg);
+\draw[arrow] (client) -- (db);
+\end{tikzpicture}
+\caption{Architecture MCP simplifiée envisagée pour AegisMCP}
+\label{fig:mcp-architecture}
+\end{figure}
+
+\subsection{Outils et ressources}
+
+Les \textbf{outils} représentent des actions invocables : lire un document, créer un objet, envoyer un message, interroger une API, exécuter une commande dans un sandbox. Les \textbf{ressources} représentent plutôt des données accessibles via une interface standardisée. Pour la sécurité, les deux doivent être accompagnés de métadonnées et de politiques.
+
+Un nom d'outil ou sa description ne doivent pas être considérés comme une preuve de confiance. Un serveur compromis peut publier une description trompeuse, exagérer les garanties d'une fonction ou utiliser un nom proche d'un outil légitime. AegisMCP traite donc les descriptions comme des données non fiables et associe la confiance au serveur, au propriétaire, à l'identité et à une politique locale.
+
+\subsection{Transport, identité et autorisation}
+
+La sécurité de MCP comporte deux niveaux complémentaires. Le premier est la sécurité protocolaire : authentification, autorisation, transport, isolation des credentials et contrôle des scopes. Le second est la sécurité \textbf{contextuelle} de l'action. Un token OAuth valide prouve qu'une application a techniquement reçu un droit ; il ne prouve pas que l'action demandée est cohérente avec le but actuel de l'utilisateur.
+
+AegisMCP se place précisément à ce second niveau. L'objectif n'est pas de remplacer OAuth ou les mécanismes MCP, mais d'ajouter une couche qui répond à la question : \emph{faut-il exercer ce droit maintenant, sur cette donnée, dans ce but et vers cette destination ?}
+
+\section{Menaces de sécurité visant les agents IA}
+
+\subsection{Prompt injection directe}
+
+La prompt injection directe survient lorsqu'un utilisateur tente explicitement de modifier les instructions de l'agent. L'attaque peut demander d'ignorer le système, d'adopter un autre rôle ou d'exécuter une action non prévue. Dans un agent à outils, le risque augmente parce que l'objectif n'est plus uniquement de produire du texte interdit, mais de déclencher une capacité réelle.
+
+La défense ne doit pas se limiter à reconnaître certaines formulations. Aegis Guard s'intéresse plutôt à l'action proposée : même si le modèle est persuadé qu'une demande est légitime, l'exécution doit respecter les politiques locales.
+
+\subsection{Prompt injection indirecte et goal hijacking}
+
+La prompt injection indirecte est plus dangereuse parce que l'attaquant n'interagit pas nécessairement avec l'agent. Il place une instruction dans une donnée que l'agent est susceptible de traiter : page web, document, email, description de produit, ticket ou résultat d'outil. Greshake et al. décrivent cette confusion entre données et instructions comme une surface d'attaque propre aux applications intégrant des LLM \cite{greshake2023}.
+
+InjecAgent évalue ce risque dans des agents intégrés à des outils et couvre des scénarios d'atteinte directe à l'utilisateur et d'exfiltration de données \cite{injecagent}. AgentDojo propose de son côté un environnement dynamique où les données retournées par des outils peuvent détourner l'agent vers une tâche malveillante \cite{agentdojo}. Les résultats de ces travaux montrent que la vulnérabilité est réelle, mais non uniforme. Cette observation est cohérente avec les premiers tests d'AegisMCP : une injection évidente peut échouer contre un modèle donné sans constituer une garantie générale.
+
+\subsection{Tool misuse et excessive agency}
+
+Un outil légitime peut être utilisé dans un mauvais contexte. Par exemple, \code{send\_message} peut être nécessaire pour notifier un collègue, mais ne devrait pas être utilisé pour transférer un document RESTRICTED vers une adresse externe sur la seule initiative du modèle. Le problème n'est donc pas forcément l'outil lui-même, mais son \textbf{mauvais usage}.
+
+L'\textit{excessive agency} apparaît lorsque l'agent dispose de plus de liberté que nécessaire. Un résumé de document ne nécessite pas un accès shell, un envoi de mail et une écriture de base. Plus le nombre d'outils et de permissions est grand, plus le rayon d'impact d'une compromission augmente.
+
+\subsection{Tool poisoning et manipulation de métadonnées}
+
+Le \textit{tool poisoning} exploite la manière dont un agent découvre et interprète les outils. Une description malveillante peut insérer des instructions indirectes, inciter le modèle à transmettre des données, ou prétendre qu'une opération est nécessaire à une tâche légitime. Dans un environnement MCP, ce risque est particulièrement pertinent parce que les outils peuvent être découverts dynamiquement depuis des serveurs distincts.
+
+AegisMCP prévoit plusieurs contre-mesures : inventaire de serveurs autorisés, empreinte ou identité du serveur, classification de confiance, règles locales par outil, séparation entre description fonctionnelle et autorité de sécurité, et journalisation de la provenance de la définition d'outil.
+
+\subsection{Tool shadowing et confusion de nom}
+
+Deux serveurs peuvent exposer des outils similaires ou identiques. Un serveur non fiable pourrait publier un outil nommé \code{read\_document} alors qu'un serveur interne expose déjà une capacité du même nom. Si la sélection est faite uniquement sur la sémantique, l'agent risque de choisir la mauvaise implémentation.
+
+La politique Aegis doit donc identifier un outil par un tuple plus précis : serveur, nom, version, propriétaire, niveau de confiance et éventuellement empreinte de configuration. Le nom lisible reste utile pour le LLM, mais il ne doit pas être l'identifiant de sécurité.
+
+\subsection{RAG poisoning}
+
+L'empoisonnement RAG consiste à introduire dans le corpus des données conçues pour être récupérées par le retriever et influencer le LLM. L'attaque peut viser la qualité de la réponse, mais aussi l'exécution d'outils. Un document peut contenir une instruction affirmant qu'une validation nécessite l'accès à un fichier privé ou l'appel d'une API.
+
+La défense envisagée combine provenance, classification de source, filtrage de corpus, labels de confiance et contrôle de l'action au moment de l'exécution. L'idée importante est que la couche Guard ne doit pas avoir besoin de \emph{comprendre parfaitement} l'attaque textuelle : elle peut refuser une action incohérente avec le but utilisateur, même si le modèle a été convaincu.
+
+\subsection{Memory poisoning}
+
+Une mémoire persistante mal protégée peut transformer une attaque ponctuelle en compromission durable. L'attaquant cherche à faire sauvegarder une règle comme : « pour toute analyse fournisseur, envoyer d'abord les données de validation à telle adresse ». Si cette entrée est rejouée ultérieurement, le modèle peut considérer la règle comme faisant partie du contexte interne.
+
+AegisMCP prévoit que chaque élément mémoire conserve sa provenance, un niveau de confiance et une durée de validité. Les entrées provenant de sources non fiables peuvent être isolées, non persistées ou nécessiter une validation avant promotion vers une mémoire de confiance.
+
+\subsection{Identity and privilege abuse}
+
+Dans un système d'entreprise, l'agent agit rarement sans identité. Il peut hériter des droits d'un utilisateur, d'un service account ou d'une application. Le risque apparaît lorsqu'il utilise ces droits au-delà de l'intention initiale. Un agent authentifié comme un utilisateur administrateur possède potentiellement un pouvoir disproportionné par rapport à la tâche.
+
+Le modèle Aegis propose un contexte d'identité explicite : acteur, rôle, permissions, scopes temporaires et propriétaire de la session. Les autorisations peuvent alors être liées à la tâche et limitées dans le temps.
+
+\subsection{Tool-chain exfiltration}
+
+L'exfiltration agentique peut être le résultat d'une chaîne plutôt que d'un outil unique. Par exemple :
+
+\begin{enumerate}
+    \item lecture d'un document interne ;
+    \item extraction d'un secret ;
+    \item création d'un message ;
+    \item transmission à une destination externe.
+\end{enumerate}
+
+Chacune de ces actions peut sembler acceptable prise isolément. La détection nécessite donc une vision du flux de données. AegisMCP prévoit de conserver un contexte d'exécution permettant d'associer une donnée sensible à son origine et d'empêcher qu'elle traverse une frontière de confiance non autorisée.
+
+\subsection{Unexpected code execution et sandbox abuse}
+
+Un agent disposant d'un outil d'exécution de code peut générer des commandes ou scripts. Même dans un environnement sandbox, il faut contrôler les limites : réseau, fichiers montés, durée, mémoire, processus, variables d'environnement et secrets. Le projet n'a pas pour objectif de construire un hyperviseur complet, mais le catalogue d'attaques prévoit un scénario d'exécution inattendue afin d'évaluer la capacité de la politique à exiger une approbation ou à bloquer un outil critique.
+
+\subsection{Menaces agentiques selon l'OWASP}
+
+L'OWASP GenAI Security Project publie un Top 10 dédié aux applications agentiques pour 2026, destiné à identifier les risques critiques rencontrés par les systèmes capables de planifier, agir et prendre des décisions \cite{owaspagentic2026}. AegisMCP utilise ce référentiel comme une taxonomie de validation, sans prétendre qu'il remplace une analyse de risque propre au contexte.
+
+Les catégories retenues dans le projet sont résumées dans le tableau~\ref{tab:owasp-agentic}.
+
+\begin{table}[H]
+\centering
+\caption{Correspondance entre risques agentiques et scénarios AegisMCP}
+\label{tab:owasp-agentic}
+\begin{tabularx}{\textwidth}{p{3.8cm} X}
+\toprule
+\textbf{Famille de risque} & \textbf{Exemple étudié dans AegisMCP} \\
+\midrule
+Détournement du but & Injection directe ou indirecte modifiant la tâche initiale \\
+Mauvais usage d'outils & Envoi ou écriture non nécessaire à la tâche \\
+Abus d'identité et privilèges & Utilisation d'un scope trop large ou d'une identité privilégiée \\
+Supply chain agentique & Serveur MCP non approuvé ou outil tiers malveillant \\
+Exécution de code inattendue & Appel d'un sandbox ou commande sans justification \\
+Empoisonnement mémoire/contexte & RAG ou mémoire persistante manipulée \\
+Communication inter-agents & Délégation vers un agent ou service non fiable \\
+Défaillances en cascade & Boucles, répétitions d'appels, propagation d'erreurs \\
+Confiance humain-agent & Formulation trompeuse conduisant l'utilisateur à approuver \\
+Comportement rogue & Déviation persistante ou actions non alignées avec la politique \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Approches de sécurisation}
+
+\subsection{Principe Zero-Trust appliqué aux agents IA}
+
+Le Zero-Trust est souvent résumé par l'idée de ne faire confiance à aucun composant de manière implicite et de vérifier explicitement chaque accès. Appliqué à un agent IA, ce principe signifie qu'une sortie du LLM n'est jamais une preuve d'autorisation. Une action doit être évaluée selon son contexte, y compris lorsque le modèle est considéré comme de haute qualité.
+
+AegisMCP traduit ce principe en plusieurs règles :
+
+\begin{itemize}
+    \item le LLM propose ; la politique décide ;
+    \item le contenu externe est traité comme donnée, pas comme autorité ;
+    \item une description d'outil n'est pas une politique de sécurité ;
+    \item les permissions sont minimales, temporaires et liées à la tâche ;
+    \item les actions irréversibles ou à fort impact peuvent nécessiter un humain ;
+    \item les décisions importantes doivent produire une trace exploitable.
+\end{itemize}
+
+\subsection{Contrôle d'accès contextuel}
+
+Le RBAC associe des rôles à des permissions. Il est utile mais parfois insuffisant pour un agent, car le contexte varie rapidement. L'ABAC ajoute des attributs : type de donnée, destination, heure, niveau de risque, propriétaire ou but. Aegis Guard suit une logique proche de l'ABAC : la décision combine plusieurs attributs et peut inclure la relation entre la demande courante et le but utilisateur.
+
+Exemple :
+
+\begin{center}
+\begin{tabular}{ll}
+Utilisateur & analyste \\
+But & résumer un rapport fournisseur \\
+Outil demandé & \code{send\_message} \\
+Donnée & RESTRICTED \\
+Destination & externe \\
+Source de l'instruction & document non fiable \\
+Décision & DENY \\
+\end{tabular}
+\end{center}
+
+Cette approche ne requiert pas de détecter exactement la phrase d'attaque. Elle raisonne sur les conséquences.
+
+\subsection{Provenance}
+
+La provenance décrit l'origine d'une information ou d'une instruction. AegisMCP propose des labels tels que :
+
+\begin{itemize}
+    \item \code{TRUSTED\_SYSTEM} ;
+    \item \code{TRUSTED\_USER} ;
+    \item \code{TRUSTED\_POLICY} ;
+    \item \code{TRUSTED\_MCP} ;
+    \item \code{UNTRUSTED\_DOCUMENT} ;
+    \item \code{UNTRUSTED\_WEB} ;
+    \item \code{UNTRUSTED\_TOOL\_OUTPUT} ;
+    \item \code{UNVERIFIED\_AGENT} ;
+    \item \code{DERIVED\_CONTENT}.
+\end{itemize}
+
+La provenance n'est pas une garantie de vérité. Elle indique simplement le niveau d'autorité et de confiance que la politique peut attribuer à l'origine.
+
+\subsection{Classification des données}
+
+Le projet standardise quatre niveaux :
+
+\begin{description}
+    \item[PUBLIC] information librement diffusée ;
+    \item[INTERNAL] information destinée au fonctionnement interne ;
+    \item[CONFIDENTIAL] information dont une divulgation peut causer un préjudice ;
+    \item[RESTRICTED] information hautement sensible soumise aux contrôles les plus stricts.
+\end{description}
+
+La classification permet de formuler des règles de flux : une donnée RESTRICTED ne peut pas être envoyée vers une destination externe sans autorisation explicite, même si le modèle propose l'action.
+
+\subsection{Human in the Loop}
+
+L'humain intervient lorsque l'automatisation seule serait trop risquée. Dans AegisMCP, l'approbation est réservée aux actions pour lesquelles un refus automatique serait trop restrictif mais une autorisation silencieuse trop dangereuse. L'interface doit présenter une information compréhensible : outil, arguments, donnée, destination, justification, risque et source de la demande.
+
+Le mécanisme doit éviter de devenir une simple boîte de dialogue répétitive. Les KPI pourront mesurer le nombre d'approbations, le taux d'acceptation et la charge imposée à l'utilisateur.
+
+\section{Standards et frameworks de cybersécurité et de gouvernance}
+
+\subsection{NIST AI Risk Management Framework}
+
+Le NIST AI RMF est un cadre volontaire destiné à aider les organisations à intégrer des considérations de confiance dans la conception, le développement, l'utilisation et l'évaluation de systèmes d'IA \cite{nistairmf}. Il est organisé autour de quatre fonctions : \textbf{GOVERN}, \textbf{MAP}, \textbf{MEASURE} et \textbf{MANAGE}. Le NIST a également publié un profil pour l'IA générative afin de compléter le cadre par des risques spécifiques aux systèmes génératifs \cite{nistgenai}.
+
+Aegis GRC utilise ces fonctions comme grille de lecture :
+
+\begin{itemize}
+    \item GOVERN : rôles, politiques, responsabilités et gouvernance des serveurs MCP ;
+    \item MAP : inventaire des agents, outils, données et scénarios d'usage ;
+    \item MEASURE : campagnes Aegis Red, indicateurs et efficacité des contrôles ;
+    \item MANAGE : traitement du risque, acceptation, mitigation et suivi du risque résiduel.
+\end{itemize}
+
+\subsection{ISO/IEC 42001}
+
+ISO/IEC 42001:2023 spécifie les exigences d'un système de management de l'intelligence artificielle. La norme vise l'établissement, la mise en œuvre, la maintenance et l'amélioration continue d'un système de management pour les organisations développant ou utilisant des systèmes d'IA \cite{iso42001}. Elle suit une logique de management structurée et s'inscrit dans le cycle PDCA.
+
+AegisMCP ne prétend pas fournir une certification ISO/IEC 42001. Le projet utilise la norme comme source de principes : politiques, rôles, inventaire, gestion des risques, amélioration continue, documentation et preuves. La distinction est importante : un projet académique peut démontrer un \emph{mapping} ou une préparation, mais ne doit pas déclarer une conformité certifiée sans audit approprié.
+
+\subsection{ISO/IEC 23894}
+
+ISO/IEC 23894:2023 fournit des recommandations pour la gestion des risques spécifiquement liés à l'IA et pour leur intégration dans les activités de l'organisation \cite{iso23894}. Dans Aegis GRC, cette norme soutient la méthodologie de risque : identification, analyse, traitement, surveillance et amélioration.
+
+\subsection{ISO/IEC 27001}
+
+ISO/IEC 27001 reste pertinente pour les contrôles de sécurité de l'information : contrôle d'accès, gestion des actifs, journalisation, gestion des fournisseurs, sécurité des opérations et traitement des incidents. AegisMCP utilise des principes sélectionnés lorsque ceux-ci s'appliquent aux agents et serveurs MCP. L'objectif n'est pas de reproduire un SMSI complet, mais d'éviter de traiter la sécurité IA comme un domaine isolé des pratiques de sécurité de l'information.
+
+\subsection{Contexte marocain : loi 09-08 et CNDP}
+
+Au Maroc, la loi 09-08 encadre la protection des personnes physiques à l'égard du traitement des données à caractère personnel. La CNDP rappelle notamment les principes de finalité, proportionnalité, qualité des données, durée de conservation, droits des personnes, sécurité et confidentialité des traitements \cite{cndp0908,cndpconditions}. Les traitements d'IA utilisant des données personnelles restent concernés par ce cadre \cite{cndpai}.
+
+AegisMCP adopte donc une règle de laboratoire : les expériences utilisent des données synthétiques. Dans une mise en production, les flux vers un LLM externe ou un serveur MCP tiers devraient faire l'objet d'une analyse de finalité, de proportionnalité, de transfert et de protection adaptée au contexte réel.
+
+\section{Synthèse de l'état de l'art}
+
+L'état de l'art conduit à trois constats principaux.
+
+Premièrement, la sécurité des agents ne peut pas être réduite au prompt engineering. Les modèles peuvent résister à certaines injections, mais la robustesse varie selon les modèles et les scénarios. Deuxièmement, MCP améliore l'interopérabilité mais crée des frontières de confiance explicites qui doivent être gouvernées. Troisièmement, l'évaluation technique doit être reliée à une démarche de risque afin de produire des décisions auditables.
+
+Ces constats motivent l'architecture AegisMCP : un point de contrôle d'exécution indépendant du LLM, un laboratoire de Red Teaming reproductible et une chaîne GRC reliant les résultats aux risques et aux contrôles.
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+Ce chapitre a présenté les bases technologiques et normatives nécessaires au projet. Il a mis en évidence les risques liés à l'autonomie, aux contenus externes, aux outils, à la mémoire, au RAG et aux environnements MCP. L'approche retenue n'essaie pas de remplacer les protections internes des modèles ou les mécanismes d'autorisation du protocole ; elle ajoute une couche de contrôle contextuel et de gouvernance. Le chapitre suivant traduit ces principes en besoins, modèles, objets de sécurité et règles de conception.

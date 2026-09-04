@@ -1,0 +1,337 @@
+\chapter{Infrastructure et architectures proposées}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+Après avoir défini les besoins et le modèle de sécurité, cette partie présente les choix d'infrastructure retenus pour AegisMCP. Le projet cherche un compromis entre réalisme, simplicité de déploiement et reproductibilité. Il n'est pas nécessaire de construire une infrastructure de laboratoire lourde avec plusieurs machines virtuelles : le cœur de la recherche porte sur la logique agentique, les appels d'outils, la sécurité MCP et la gouvernance. L'architecture est donc conçue pour fonctionner principalement sur une machine de développement, avec des services locaux et des API externes lorsque cela apporte une meilleure stabilité fonctionnelle.
+
+\section{Benchmarking des solutions d'exécution des modèles}
+
+\subsection{Exécution locale}
+
+L'exécution locale d'un LLM présente plusieurs avantages. Les données ne quittent pas la machine, le coût d'inférence est nul après installation, et la version du modèle peut être figée pour améliorer la reproductibilité. Des outils comme Ollama simplifient le déploiement de modèles quantifiés et permettent de tester des familles comme Qwen ou Llama.
+
+Cependant, un projet centré sur les agents et le \textit{tool calling} impose des contraintes supplémentaires. Un petit modèle local peut répondre correctement à une question textuelle tout en étant moins fiable lorsqu'il doit produire des appels d'outils structurés, gérer plusieurs étapes ou distinguer une instruction d'un contenu. Une anomalie devient alors difficile à diagnostiquer : provient-elle du code, du modèle, du prompt, de la quantification ou de l'outil ?
+
+L'exécution locale reste donc prévue comme axe expérimental secondaire. Elle est particulièrement intéressante dans la phase finale pour vérifier si Aegis Guard reste efficace avec un modèle différent et pour étudier la confidentialité. Elle n'est pas retenue comme point de départ principal du prototype.
+
+\subsection{Utilisation d'une API LLM}
+
+L'utilisation d'une API externalise l'inférence et réduit la charge de la machine de développement. Elle permet également d'accéder à des modèles plus grands et souvent plus robustes pour le tool calling. Le principal inconvénient est la dépendance à un fournisseur : disponibilité, quotas, changement de modèle, politique de données et coût potentiel.
+
+OpenRouter a été retenu dans le prototype initial comme couche d'accès, car il expose une interface de tool calling standardisée et permet de changer de modèle en modifiant principalement son identifiant \cite{openroutertools}. La documentation indique que l'API peut être utilisée au travers d'une interface compatible avec le SDK OpenAI \cite{openrouterquickstart}. Cette compatibilité a facilité la construction du premier provider sans coupler l'agent à un fournisseur unique.
+
+Le fournisseur reste néanmoins une dépendance externe. Les expériences du chapitre 5 montrent que des réponses 502 peuvent être retournées lorsqu'un endpoint en amont est surchargé et que certains slugs de modèles gratuits peuvent devenir indisponibles. L'architecture doit donc traiter l'échec du provider comme un état normal à journaliser, et non comme une exception impossible.
+
+\subsection{Comparaison et choix retenu}
+
+\begin{table}[H]
+\centering
+\caption{Comparaison entre modèle local et API pour AegisMCP}
+\label{tab:local-api}
+\begin{tabularx}{\textwidth}{p{3.5cm} X X}
+\toprule
+\textbf{Critère} & \textbf{Local} & \textbf{API / OpenRouter} \\
+\midrule
+Confidentialité & Excellente si tout reste local & Dépend du fournisseur et du routage \\
+Coût direct & Faible après installation & Variable ; endpoints gratuits possibles mais non garantis \\
+Tool calling & Dépend fortement du modèle local & Généralement plus stable avec modèles spécialisés \\
+Ressources machine & CPU/GPU/RAM consommés localement & Charge locale faible \\
+Reproductibilité & Bonne si modèle et quantification figés & Bonne si identifiant et provider stables, mais service externe évolutif \\
+Disponibilité & Sous contrôle local & Dépend du fournisseur \\
+Comparaison multi-modèles & Nécessite téléchargement et ressources & Changement d'identifiant plus simple \\
+Choix pour le MVP & Secondaire & \textbf{Principal} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Le choix retenu est donc \textbf{hybride et provider-indépendant}. Le développement commence avec une API afin de stabiliser la boucle agentique et l'appel d'outils. L'interface interne masque le fournisseur. Un provider local pourra être ajouté sans modifier Aegis Guard, les serveurs MCP ou le runner expérimental.
+
+\section{Benchmarking des solutions MCP}
+
+\subsection{Pourquoi intégrer un vrai MCP ?}
+
+Le premier prototype utilise volontairement des fonctions Python locales. Cette étape permet d'isoler le fonctionnement de base du tool calling. Toutefois, rester uniquement sur des fonctions locales limiterait la portée du projet : le sujet porte explicitement sur les risques et la gouvernance des agents connectés à des serveurs MCP.
+
+L'intégration MCP apporte plusieurs dimensions expérimentales supplémentaires :
+
+\begin{itemize}
+    \item découverte dynamique d'outils ;
+    \item séparation entre fournisseur d'outil et orchestrateur ;
+    \item identité du serveur ;
+    \item transports distincts ;
+    \item contrôle des serveurs autorisés ;
+    \item tool poisoning et shadowing ;
+    \item scopes d'autorisation ;
+    \item risque de supply chain agentique.
+\end{itemize}
+
+\subsection{SDK Python retenu}
+
+Le projet prévoit l'utilisation du SDK Python officiel MCP. La documentation actuelle indique que la branche v2 est stable et que \code{pip install mcp} installe la version 2.x. Cette version parle la révision 2026-07-28 et introduit notamment un \code{Client} de premier plan ainsi que la classe serveur \code{MCPServer} \cite{mcppythonv2}. Le client peut négocier automatiquement entre une génération moderne et des serveurs historiques \cite{mcpprotocolversions}.
+
+Le choix du SDK officiel apporte trois avantages : conformité avec l'évolution du standard, réduction du code protocolaire spécifique et meilleure reproductibilité des démonstrations. AegisMCP ne cherche pas à réimplémenter JSON-RPC ou le protocole lui-même ; il cherche à sécuriser la décision d'utiliser une capacité exposée par ce protocole.
+
+\subsection{Transports}
+
+Deux transports sont particulièrement utiles dans le laboratoire :
+
+\begin{description}
+    \item[stdio] adapté aux serveurs locaux lancés comme processus enfants ; la surface réseau est minimale et le déploiement simple ;
+    \item[Streamable HTTP] utile lorsque l'on veut reproduire une séparation réseau, un service distant ou plusieurs clients.
+\end{description}
+
+Le MVP peut commencer en mémoire ou en stdio afin de réduire la complexité, puis ajouter HTTP pour les scénarios de confiance et de serveur tiers. L'architecture de sécurité ne doit pas dépendre du transport : Aegis Guard intervient avant l'appel du client MCP.
+
+\section{Architecture proposée}
+
+\subsection{Architecture globale de la plateforme}
+
+L'architecture cible est divisée en six plans logiques : agent, capacités MCP, sécurité, Red Team, observabilité et GRC.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=1.0cm,
+  plane/.style={draw, rounded corners, minimum width=12.5cm, minimum height=1.15cm, align=center},
+  box/.style={draw, rounded corners, text width=2.5cm, minimum height=0.75cm, align=center, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[plane, fill=blue!4] (agentplane) at (0,4.7) {};
+\node[font=\bfseries] at (-4.6,5.05) {Plan Agent};
+\node[box] (user) at (-3.5,4.45) {Utilisateur};
+\node[box] (provider) at (0,4.45) {Model Provider};
+\node[box] (agent) at (3.5,4.45) {Agent / planner};
+
+\node[plane, fill=green!4] (securityplane) at (0,2.8) {};
+\node[font=\bfseries] at (-4.4,3.15) {Plan Sécurité};
+\node[box] (guard) at (-3.2,2.55) {Aegis Guard};
+\node[box] (prov) at (0,2.55) {Provenance / Data};
+\node[box] (approval) at (3.2,2.55) {Approval / Identity};
+
+\node[plane, fill=orange!5] (mcpplane) at (0,0.9) {};
+\node[font=\bfseries] at (-4.5,1.25) {Plan MCP};
+\node[box] (gateway) at (-3.5,0.65) {MCP Gateway};
+\node[box] (docs) at (0,0.65) {Documents};
+\node[box] (msg) at (3.5,0.65) {Messaging / API};
+
+\node[plane, fill=red!4] (redplane) at (-3.25,-1.2) {};
+\node[font=\bfseries] at (-5.4,-0.85) {Red Team};
+\node[box] (red) at (-3.25,-1.45) {Aegis Red};
+
+\node[plane, fill=gray!8] (obsplane) at (3.25,-1.2) {};
+\node[font=\bfseries] at (1.0,-0.85) {Observabilité / GRC};
+\node[box] (telemetry) at (1.7,-1.45) {Télémétrie};
+\node[box] (grc) at (4.8,-1.45) {Aegis GRC};
+
+\draw[arr] (user) -- (provider);
+\draw[arr] (provider) -- (agent);
+\draw[arr] (agent) -- (guard);
+\draw[arr] (prov) -- (guard);
+\draw[arr] (approval) -- (guard);
+\draw[arr] (guard) -- (gateway);
+\draw[arr] (gateway) -- (docs);
+\draw[arr] (gateway) -- (msg);
+\draw[arr] (red) |- (agent);
+\draw[arr] (guard) |- (telemetry);
+\draw[arr] (gateway) |- (telemetry);
+\draw[arr] (telemetry) -- (grc);
+\end{tikzpicture}%
+}
+\caption{Architecture globale cible d'AegisMCP}
+\label{fig:global-architecture}
+\end{figure}
+
+\subsection{Plan Agent}
+
+Le plan Agent contient le provider de modèle et l'orchestrateur. Le provider expose une interface minimale : envoyer des messages, fournir des outils et recevoir une réponse ou des tool calls. Cette abstraction garantit que la couche Guard n'importe aucune dépendance spécifique à OpenRouter ou à un modèle particulier.
+
+L'orchestrateur maintient la session, la boucle agentique et les messages. Il n'exécute pas directement les outils. Lorsqu'une proposition est reçue, il construit un contexte de sécurité et appelle Aegis Guard.
+
+\subsection{Plan MCP}
+
+Le plan MCP regroupe un gateway et plusieurs serveurs. Le gateway assure la découverte, l'identification et l'invocation. Chaque outil est référencé par un identifiant canonique incluant au minimum le serveur et le nom de l'outil. Le laboratoire prévoit les serveurs suivants :
+
+\begin{itemize}
+    \item \textbf{Documents MCP Server} : lecture et recherche dans des documents synthétiques ;
+    \item \textbf{Messaging MCP Server} : messagerie simulée sans communication réseau réelle ;
+    \item \textbf{Database MCP Server} : lecture/écriture de données de démonstration ;
+    \item \textbf{Sandbox MCP Server} : exécution contrôlée pour scénarios avancés ;
+    \item \textbf{Malicious Demo Server} : serveur volontairement non fiable destiné aux tests de tool poisoning.
+\end{itemize}
+
+Le serveur de messagerie doit rester simulé pendant les expériences. Une compromission doit produire une preuve d'intention d'exfiltration, pas réellement transmettre des données.
+
+\subsection{Architecture d'Aegis Guard}
+
+Aegis Guard est conçu comme un pipeline :
+
+\begin{enumerate}
+    \item normalisation de la proposition d'outil ;
+    \item résolution de l'identité et du but ;
+    \item résolution de la confiance du serveur et du risque de l'outil ;
+    \item résolution de la provenance ;
+    \item classification des données entrantes et sortantes ;
+    \item évaluation des règles ;
+    \item calcul d'un niveau de risque ;
+    \item génération du verdict et de la justification ;
+    \item journalisation ;
+    \item exécution, blocage ou suspension.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\resizebox{0.94\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.75cm,
+  box/.style={draw, rounded corners, text width=3.4cm, minimum height=0.8cm, align=center},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (proposal) {ToolCallProposal};
+\node[box, below=of proposal] (normalize) {Normalisation};
+\node[box, below=of normalize] (context) {Contexte : identité, but, provenance};
+\node[box, below=of context] (risk) {Donnée + outil + serveur + destination};
+\node[box, below=of risk] (policy) {Policy Engine};
+\node[box, below left=1cm and 2.5cm of policy] (deny) {DENY / QUARANTINE};
+\node[box, below=1cm of policy] (approval) {REQUIRE\_APPROVAL};
+\node[box, below right=1cm and 2.5cm of policy] (allow) {ALLOW / REDUCE\_SCOPE};
+\draw[arr] (proposal) -- (normalize);
+\draw[arr] (normalize) -- (context);
+\draw[arr] (context) -- (risk);
+\draw[arr] (risk) -- (policy);
+\draw[arr] (policy) -- (deny);
+\draw[arr] (policy) -- (approval);
+\draw[arr] (policy) -- (allow);
+\end{tikzpicture}%
+}
+\caption{Architecture interne simplifiée d'Aegis Guard}
+\label{fig:guard-architecture}
+\end{figure}
+
+\subsection{Architecture d'Aegis Red}
+
+Aegis Red est séparé de l'agent afin de garantir la reproductibilité. Une campagne est définie par un identifiant, un scénario, un modèle, un nombre de répétitions, un état initial, une attaque et des critères d'évaluation. Le runner doit pouvoir fonctionner en mode verbose pour la démonstration et en mode batch pour collecter des métriques.
+
+Les payloads ne sont pas stockés uniquement dans le code de l'agent. Ils appartiennent à un catalogue de scénarios. Cette séparation permet de conserver un baseline constant et de varier une seule variable à la fois.
+
+\subsection{Architecture GRC et chaîne de preuves}
+
+Aegis GRC consomme la télémétrie structurée et ne dépend pas du texte brut des logs. Les objets principaux sont :
+
+\begin{itemize}
+    \item \code{Asset} ;
+    \item \code{Risk} ;
+    \item \code{Control} ;
+    \item \code{TestCase} ;
+    \item \code{Evidence} ;
+    \item \code{FrameworkRequirement} ;
+    \item \code{RiskTreatment} ;
+    \item \code{MetricSnapshot}.
+\end{itemize}
+
+Lorsqu'un test échoue, un finding peut être lié à un risque. Lorsqu'un contrôle est activé puis le même test rejoué, la nouvelle preuve permet d'évaluer l'efficacité. Cette approche évite de présenter des pourcentages arbitraires de conformité. Le dashboard doit afficher des faits : contrôles testés, preuves disponibles, risques ouverts, risques résiduels et mappings documentaires.
+
+\subsection{Flux complet d'une action contrôlée}
+
+Le flux cible est le suivant :
+
+\begin{enumerate}
+    \item l'utilisateur soumet un objectif ;
+    \item le provider envoie le contexte au LLM ;
+    \item le modèle propose un outil ;
+    \item l'orchestrateur enrichit la proposition avec le contexte ;
+    \item Aegis Guard évalue la proposition ;
+    \item si ALLOW, le MCP Gateway invoque le serveur ;
+    \item si REQUIRE\_APPROVAL, l'utilisateur reçoit une demande ;
+    \item si DENY, aucune exécution n'a lieu ;
+    \item le résultat et la décision sont journalisés ;
+    \item les événements importants alimentent les preuves et métriques GRC ;
+    \item le résultat autorisé est retourné au LLM pour poursuivre la tâche.
+\end{enumerate}
+
+Cette séquence matérialise le principe : \textbf{l'intelligence peut être probabiliste, l'autorisation critique doit rester contrôlée}.
+
+\section{Outils et technologies utilisés}
+
+\subsection{Backend et orchestration}
+
+Python est retenu pour le backend en raison de son écosystème IA, du SDK MCP officiel et de la rapidité de prototypage. FastAPI est prévu pour exposer les API du dashboard, les sessions d'expérience, les décisions et les objets GRC. Le code applicatif est structuré en packages plutôt qu'en scripts monolithiques.
+
+\subsection{Model Provider}
+
+Le provider initial repose sur l'API OpenRouter. Le modèle primaire du prototype a été \code{nvidia/nemotron-3-ultra-550b-a55b:free}. Le choix du modèle n'est cependant pas codé dans les autres modules ; une variable d'environnement ou un argument permet de le remplacer.
+
+Le provider intègre une logique de retry pour les erreurs temporaires. Dans la version cible, les erreurs permanentes comme 401 ou 404 doivent échouer immédiatement, tandis que les erreurs temporaires 429, 502, 503 ou 504 peuvent être retentées avec backoff.
+
+\subsection{MCP}
+
+Le SDK Python officiel v2 est la direction retenue. La version moderne supporte la révision MCP 2026-07-28 et fournit un client de haut niveau et \code{MCPServer} côté serveur \cite{mcppythonv2}. La compatibilité avec les générations précédentes est gérée par la négociation du client lorsque nécessaire \cite{mcpprotocolversions}.
+
+\subsection{Stockage et télémétrie}
+
+PostgreSQL est retenu pour les événements structurés, sessions, risques, contrôles et preuves. Pour le RAG, deux approches restent possibles : PostgreSQL avec pgvector afin de réduire le nombre de composants, ou une base vectorielle dédiée comme Qdrant. Le choix final peut dépendre de la complexité des expériences.
+
+La télémétrie ne cherche pas à reconstruire un SIEM. Elle doit rester centrée sur les objets du projet : modèle, session, tool call, décision, attaque, preuve et risque.
+
+\subsection{Interface utilisateur}
+
+Le dashboard cible peut être développé avec Next.js/TypeScript. Il comporte plusieurs vues :
+
+\begin{itemize}
+    \item sessions agentiques en temps réel ;
+    \item chaîne d'appels d'outils ;
+    \item décisions Aegis Guard ;
+    \item campagnes Aegis Red ;
+    \item registre des risques ;
+    \item catalogue de contrôles ;
+    \item preuves et mappings ;
+    \item KPI/KRI.
+\end{itemize}
+
+\subsection{Synthèse de la pile technologique}
+
+\begin{table}[H]
+\centering
+\caption{Pile technologique cible}
+\label{tab:stack}
+\begin{tabularx}{\textwidth}{p{3.2cm} p{4cm} X}
+\toprule
+\textbf{Couche} & \textbf{Technologie} & \textbf{Rôle} \\
+\midrule
+Langage backend & Python & Agent, Guard, Red, MCP, API et expérimentation \\
+LLM provider & OpenRouter & Accès initial aux modèles hébergés \\
+LLM local & Ollama (optionnel) & Comparaison locale et confidentialité \\
+MCP & SDK Python officiel v2 & Clients et serveurs MCP \\
+API & FastAPI & Accès dashboard et orchestration \\
+Base & PostgreSQL & Sessions, événements, GRC, résultats \\
+RAG & pgvector ou Qdrant & Recherche vectorielle contrôlée \\
+Frontend & Next.js / TypeScript & Visualisation et interactions \\
+Déploiement & Docker Compose pour services & Déploiement reproductible des dépendances \\
+Versioning & Git & Reproductibilité et audit du code \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Principes de déploiement sécurisé}
+
+Même dans un laboratoire, plusieurs principes doivent être appliqués :
+
+\begin{itemize}
+    \item ne jamais committer les clés API ;
+    \item utiliser un fichier \code{.env} exclu par Git ;
+    \item séparer données synthétiques et secrets de développement ;
+    \item simuler les effets externes lorsque ceux-ci ne sont pas nécessaires ;
+    \item fixer des limites de boucle et de coût ;
+    \item journaliser les erreurs de provider ;
+    \item conserver un dataset d'expérience réinitialisable ;
+    \item documenter les versions de dépendances ;
+    \item limiter l'accès réseau des futurs sandboxes.
+\end{itemize}
+
+Ces pratiques garantissent que le laboratoire de sécurité ne devienne pas lui-même une source de risque.
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+L'architecture proposée privilégie une structure légère et modulaire. L'API LLM est utilisée pour accélérer le développement initial, tout en conservant la possibilité d'un modèle local. MCP est intégré via le SDK officiel afin de tester des frontières de confiance réelles. Aegis Guard est placé avant le gateway, Aegis Red est séparé de l'agent, et la télémétrie alimente directement le volet GRC. Le chapitre suivant présente la réalisation effective du prototype au moment de cette version du rapport, les expériences déjà exécutées et les résultats disponibles sans extrapolation.

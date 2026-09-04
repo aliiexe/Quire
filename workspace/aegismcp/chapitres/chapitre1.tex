@@ -1,0 +1,223 @@
+\chapter{Contexte général du projet}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+Ce premier chapitre situe le projet AegisMCP dans son contexte technique et académique. Il présente l'organisation du travail en binôme, analyse les approches existantes utilisées pour sécuriser les agents IA, formalise la problématique et les objectifs, puis décrit la méthodologie de gestion du projet. Contrairement à un projet de stage classique rattaché à un organisme d'accueil, AegisMCP est présenté ici comme un projet académique de recherche appliquée. La priorité est donc donnée au problème scientifique, à la reproductibilité des expérimentations et à la traçabilité des choix techniques.
+
+\section{Cadre général du projet}
+
+\subsection{Présentation du projet AegisMCP}
+
+AegisMCP est une plateforme de cybersécurité dédiée à l'étude des \textbf{agents IA autonomes utilisant des outils externes et le protocole MCP}. Le nom \emph{Aegis} fait référence à l'idée de protection et de bouclier, tandis que MCP désigne le \textit{Model Context Protocol}. L'objectif n'est pas de créer un assistant conversationnel supplémentaire, mais de construire un environnement dans lequel il est possible d'observer, provoquer, mesurer et contrôler des comportements agentiques à risque.
+
+Le système cible est organisé autour de quatre piliers complémentaires :
+
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{AI/MCP Lab} : un environnement contrôlé contenant un agent, des outils, des serveurs MCP, des documents synthétiques, des données de test et des scénarios légitimes ou malveillants ;
+    \item \textbf{Aegis Red} : un module de Red Teaming chargé d'exécuter des campagnes d'attaque reproductibles contre l'agent et ses capacités ;
+    \item \textbf{Aegis Guard} : une couche de décision située entre la proposition d'action du LLM et son exécution réelle ;
+    \item \textbf{Aegis GRC} : une couche de gouvernance, de gestion des risques et de conformité qui transforme les résultats techniques en risques, contrôles, preuves et indicateurs.
+\end{enumerate}
+
+La plateforme est conçue pour fonctionner avec plusieurs fournisseurs de modèles. Le prototype initial utilise un fournisseur abstrait, \code{OpenRouterProvider}, afin d'éviter de lier l'architecture à un seul LLM. Cette approche permettra ensuite d'exécuter les mêmes scénarios avec plusieurs modèles hébergés ou locaux, et donc de distinguer ce qui relève du comportement d'un modèle particulier de ce qui relève de l'efficacité des contrôles Aegis.
+
+Le projet est volontairement fondé sur des \textbf{données synthétiques}. Les documents de démonstration, identifiants, secrets, employés et adresses utilisés dans les scénarios ne représentent pas des personnes ou des systèmes réels. Cette décision réduit le risque opérationnel et constitue également un principe de gouvernance : une plateforme de test de sécurité ne doit pas créer elle-même une nouvelle exposition de données sensibles.
+
+\subsection{Organisation du binôme}
+
+Le projet est réalisé par \textbf{Ali Bourak} et \textbf{Younes Tarik}. Compte tenu du caractère transversal d'AegisMCP, les deux membres participent à la conception, à l'implémentation, aux expérimentations et à la documentation. Afin de faciliter la conduite du projet, le travail est néanmoins structuré autour de domaines de responsabilité dominants, sans créer de séparation rigide.
+
+\begin{table}[H]
+\centering
+\caption{Organisation fonctionnelle du binôme}
+\label{tab:roles-binome}
+\begin{tabularx}{\textwidth}{p{3.2cm} X X}
+\toprule
+\textbf{Domaine} & \textbf{Ali Bourak} & \textbf{Younes Tarik} \\
+\midrule
+Architecture de sécurité & Contribution principale à la modélisation du modèle de menace, de la logique Zero-Trust et des contrôles Aegis Guard. & Relecture, validation des interfaces techniques et contribution à l'intégration. \\
+\addlinespace
+Développement & Contribution au modèle provider, aux expériences de sécurité et aux mécanismes de contrôle. & Contribution aux composants applicatifs, aux intégrations MCP, aux interfaces et aux tests. \\
+\addlinespace
+Red Teaming & Conception de scénarios d'attaque et définition des critères de compromission. & Automatisation des scénarios, collecte des résultats et reproductibilité. \\
+\addlinespace
+GRC & Structuration du registre des risques, contrôles, preuves et mappings. & Contribution aux indicateurs, à la visualisation et à l'intégration des données techniques. \\
+\addlinespace
+Rapport et soutenance & Rédaction et validation partagées. & Rédaction et validation partagées. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cette répartition est conçue comme un cadre de coordination et non comme une séparation absolue des tâches. Les décisions d'architecture, les tests majeurs et les résultats expérimentaux doivent être compris par les deux membres, afin que le projet reste soutenable et auditable.
+
+\section{Étude de l'existant}
+
+\subsection{Description de l'existant}
+
+L'écosystème actuel des agents IA propose plusieurs mécanismes de sécurité, mais ceux-ci sont souvent répartis entre différentes couches. Les modèles eux-mêmes disposent d'un entraînement de sûreté et d'une hiérarchie d'instructions. Les frameworks d'agents ajoutent des listes d'outils, des prompts système, des limites de boucle et parfois des mécanismes d'approbation. Les fournisseurs de modèles proposent quant à eux des fonctionnalités de \textit{tool calling} structurées. Enfin, des standards émergents comme MCP cherchent à uniformiser l'accès aux outils et aux ressources.
+
+Une approche fréquente consiste à compter sur le \textbf{prompt système} pour rappeler au modèle qu'il ne doit pas suivre des instructions non fiables. Cette défense peut être utile, mais elle reste probabiliste : elle dépend de la capacité du LLM à interpréter correctement la provenance des informations, à détecter une tentative de manipulation et à maintenir la priorité du but utilisateur. Les benchmarks AgentDojo et InjecAgent montrent que la réussite ou l'échec d'une attaque varie selon le modèle et la tâche, ce qui rend insuffisant un contrôle exclusivement fondé sur le langage naturel \cite{injecagent,agentdojo}.
+
+Une deuxième approche consiste à réduire le nombre d'outils mis à disposition. Cette mesure est pertinente, car un agent qui ne possède pas de capacité d'envoi ne peut pas exfiltrer une information par cette voie. Toutefois, une application réelle a souvent besoin de plusieurs capacités et les permissions peuvent être trop larges. Le problème se déplace alors vers la \textbf{composition des capacités} : une lecture de document, un accès à une base et un outil de messagerie sont peut-être individuellement légitimes, mais leur combinaison peut créer une chaîne d'exfiltration.
+
+Une troisième approche s'appuie sur l'approbation humaine. Les actions sensibles peuvent être suspendues jusqu'à validation. Cette solution réduit le risque mais crée une charge utilisateur, des interruptions et un risque de \textit{rubber stamping} : si l'utilisateur reçoit trop de demandes, il peut finir par les approuver mécaniquement. AegisMCP considère donc l'approbation comme un contrôle parmi d'autres, et non comme la seule barrière de sécurité.
+
+Enfin, les environnements MCP apportent leurs propres mécanismes d'autorisation et de transport. La révision 2026-07-28 renforce notamment les aspects liés à l'autorisation et formalise une évolution du protocole \cite{mcp2026}. Ces mécanismes sont nécessaires pour authentifier et connecter les composants, mais ils ne répondent pas à eux seuls à la question métier suivante : \emph{même si l'agent est techniquement autorisé à appeler un outil, cette action est-elle justifiée par la tâche en cours, avec ces données, vers cette destination ?}
+
+\subsection{Critique de l'existant}
+
+L'analyse met en évidence cinq limites principales.
+
+\paragraph{Limite 1 : confusion entre capacité et autorisation contextuelle.}
+Un agent peut disposer techniquement d'un outil sans que chaque utilisation de cet outil soit légitime. Une permission globale telle que \code{send\_message} est trop grossière lorsqu'il faut distinguer un envoi interne autorisé d'une transmission d'informations restreintes vers une destination externe.
+
+\paragraph{Limite 2 : dépendance excessive au comportement du LLM.}
+Si une application considère le refus du modèle comme sa principale défense, la sécurité dépend d'un composant probabiliste qui peut évoluer d'une version à une autre. Les expériences préliminaires de ce projet illustrent justement ce phénomène : certaines injections sont ignorées par le modèle testé, mais ce résultat ne constitue pas une garantie de sécurité généralisable.
+
+\paragraph{Limite 3 : faible prise en compte de la provenance.}
+Une instruction issue d'un utilisateur authentifié, une instruction trouvée dans un document, une description d'outil fournie par un serveur tiers et une mémoire générée lors d'une session précédente ne devraient pas avoir la même autorité. Pourtant, beaucoup d'agents concatènent ces éléments dans un contexte textuel sans appliquer un modèle explicite de confiance.
+
+\paragraph{Limite 4 : absence de liaison entre sécurité technique et GRC.}
+Les rapports de Red Teaming, journaux d'exécution et politiques de sécurité sont souvent séparés des registres de risques et des obligations de gouvernance. Il devient difficile de répondre à des questions simples : quel contrôle réduit quel risque ? Quelle preuve démontre son efficacité ? Quel risque résiduel reste après re-test ?
+
+\paragraph{Limite 5 : manque de reproductibilité.}
+Les LLM sont non déterministes, les modèles hébergés peuvent évoluer et les endpoints gratuits peuvent disparaître ou être temporairement indisponibles. Une évaluation scientifique doit donc enregistrer les identifiants de modèle, paramètres, attaques, résultats, erreurs fournisseur et versions de code.
+
+Ces limites justifient une architecture dans laquelle la décision de sécurité est placée \textbf{hors du LLM}, tout en conservant le LLM comme moteur de planification.
+
+\section{Problématique}
+
+La problématique générale du projet peut être formulée ainsi :
+
+\begin{quote}
+\textbf{Comment concevoir une architecture de sécurité Zero-Trust capable de contrôler les actions d'agents IA autonomes utilisant des outils via MCP, de résister à des manipulations issues de contenus non fiables et de produire des preuves techniques exploitables dans un processus de gestion des risques et de conformité ?}
+\end{quote}
+
+Cette problématique est décomposée en plusieurs questions de recherche :
+
+\begin{itemize}
+    \item Dans quelle mesure un contenu non fiable peut-il détourner le but d'un agent et déclencher un appel d'outil non demandé par l'utilisateur ?
+    \item Peut-on empêcher une action dangereuse sans dépendre uniquement du refus du LLM ?
+    \item Comment représenter la provenance, la sensibilité des données, le niveau de risque d'un outil et la confiance d'un serveur MCP dans une décision unique ?
+    \item Quel niveau de granularité faut-il pour mettre en œuvre le moindre privilège et la \emph{moindre autonomie} ?
+    \item Dans quels cas une décision doit-elle être automatique et dans quels cas faut-il demander une approbation humaine ?
+    \item Comment mesurer l'efficacité d'Aegis Guard sans dégrader excessivement la capacité de l'agent à accomplir les tâches légitimes ?
+    \item Comment relier les résultats de Red Teaming aux risques, contrôles et preuves d'un processus GRC ?
+\end{itemize}
+
+\section{Objectifs du projet}
+
+\subsection{Objectif général}
+
+L'objectif général est de \textbf{concevoir et évaluer un framework de sécurité pour agents IA autonomes utilisant MCP}, capable de contrôler les actions au moment de l'exécution, de tester l'agent de manière offensive et de produire une vision structurée des risques et de l'efficacité des contrôles.
+
+\subsection{Objectifs spécifiques}
+
+Les objectifs spécifiques sont les suivants :
+
+\begin{enumerate}[label=O\arabic*.]
+    \item Construire un agent de démonstration capable d'utiliser plusieurs outils et de réaliser des tâches multi-étapes.
+    \item Créer une version volontairement non protégée servant de groupe de contrôle expérimental.
+    \item Intégrer des serveurs MCP locaux pour exposer des capacités de lecture, messagerie, base de données ou sandbox de manière contrôlée.
+    \item Développer \Red{} afin d'automatiser des scénarios d'injection, d'empoisonnement et d'abus de capacités.
+    \item Concevoir \Guard{} comme point d'interception obligatoire avant toute action sensible.
+    \item Implémenter un modèle de provenance permettant de distinguer les instructions de confiance et les contenus non fiables.
+    \item Classifier les données en niveaux tels que PUBLIC, INTERNAL, CONFIDENTIAL et RESTRICTED.
+    \item Associer un niveau de risque aux outils et aux destinations.
+    \item Ajouter un mécanisme d'approbation humaine pour les actions sensibles ou irréversibles.
+    \item Enregistrer une télémétrie structurée permettant l'analyse et l'audit des décisions.
+    \item Construire \GRC{} afin de relier les attaques, risques, contrôles, preuves, indicateurs et risques résiduels.
+    \item Comparer le baseline non protégé à la version protégée selon des métriques reproductibles.
+\end{enumerate}
+
+\section{Méthodologie et planification}
+
+\subsection{Méthodologie Agile (Scrum)}
+
+Le projet adopte une organisation inspirée de Scrum. Le choix d'une approche itérative est particulièrement adapté à AegisMCP pour deux raisons. Premièrement, les dépendances techniques -- SDK MCP, fournisseurs de modèles, API -- évoluent rapidement. Deuxièmement, la sécurité ne peut pas être évaluée uniquement à la fin : chaque fonctionnalité doit être accompagnée de tests, d'attaques et de critères d'acceptation.
+
+Chaque sprint produit donc un incrément testable. Une fonctionnalité n'est pas considérée comme terminée lorsque le code compile, mais lorsqu'elle est documentée, testée, intégrée et versionnée dans Git. Cette discipline est également appliquée lors de l'utilisation d'assistants de programmation : chaque étape dispose d'un périmètre, de critères d'acceptation, de tests et d'un commit distinct.
+
+\subsection{Adaptation des rôles Scrum au contexte du projet}
+
+Dans un binôme, les rôles Scrum traditionnels ne peuvent pas être reproduits à l'identique. Le backlog produit est maintenu conjointement. Les décisions de priorité sont prises en fonction de la valeur expérimentale : établir d'abord une fondation fonctionnelle, puis une baseline vulnérable, ensuite MCP, puis Aegis Guard, avant d'ajouter les couches de télémétrie et GRC.
+
+La revue de sprint porte sur quatre questions :
+
+\begin{enumerate}
+    \item La fonctionnalité fonctionne-t-elle dans un cas légitime ?
+    \item Peut-elle être exploitée ou détournée dans un cas adversarial ?
+    \item Les journaux permettent-ils d'expliquer ce qui s'est produit ?
+    \item Le changement est-il reproductible à partir du dépôt Git ?
+\end{enumerate}
+
+\subsection{Organisation des itérations}
+
+Le plan de travail de référence est découpé en dix sprints fonctionnels. Les durées sont indicatives et peuvent être adaptées en fonction de l'avancement réel.
+
+\begin{table}[H]
+\centering
+\caption{Planification des sprints AegisMCP}
+\label{tab:sprints}
+\begin{tabularx}{\textwidth}{p{1.3cm} p{4.2cm} X}
+\toprule
+\textbf{Sprint} & \textbf{Thème} & \textbf{Livrable principal} \\
+\midrule
+S1 & Fondation du projet & Dépôt Git, environnement Python, provider OpenRouter, test de connexion \\
+S2 & Tool calling & Agent capable de proposer et d'exécuter un outil local \\
+S3 & Baseline vulnérable & Multi-outils, données synthétiques, boucle agentique et premières injections \\
+S4 & Aegis Red & Corpus d'attaques, évaluateur, scénarios reproductibles \\
+S5 & Intégration MCP & Serveurs Documents/Messaging, client et gateway MCP \\
+S6 & Aegis Guard & Politique d'autorisation, classification, provenance et décisions \\
+S7 & Identité et approbation & Contexte utilisateur, consentement explicite, HITL \\
+S8 & Télémétrie et persistance & Événements structurés, API et base de données \\
+S9 & Aegis GRC & Registre de risques, contrôles, preuves, mappings et dashboard \\
+S10 & Expérimentation finale & Campagnes multi-modèles, métriques, discussion et soutenance \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Diagramme de Gantt}
+
+La figure~\ref{fig:gantt} illustre une planification de référence sur dix semaines. Elle n'impose pas de dates calendaires fixes et peut être recalée en fonction du calendrier pédagogique.
+
+\begin{figure}[H]
+\centering
+\begin{ganttchart}[
+    hgrid,
+    vgrid,
+    x unit=0.72cm,
+    y unit chart=0.6cm,
+    title label font=\small\bfseries,
+    bar label font=\scriptsize,
+    group label font=\scriptsize\bfseries,
+    bar height=0.55
+]{1}{10}
+\gantttitle{Planification de référence AegisMCP}{10} \\
+\gantttitlelist{1,...,10}{1} \\
+\ganttbar{Fondation}{1}{1} \\
+\ganttbar{Tool calling}{1}{2} \\
+\ganttbar{Baseline vulnérable}{2}{3} \\
+\ganttbar{Aegis Red}{3}{4} \\
+\ganttbar{MCP}{4}{6} \\
+\ganttbar{Aegis Guard}{5}{7} \\
+\ganttbar{Identité / HITL}{7}{8} \\
+\ganttbar{Télémétrie}{7}{9} \\
+\ganttbar{Aegis GRC}{8}{10} \\
+\ganttbar{Évaluation / rapport}{9}{10}
+\end{ganttchart}
+\caption{Diagramme de Gantt indicatif du projet}
+\label{fig:gantt}
+\end{figure}
+
+\subsection{Gestion de version et traçabilité}
+
+Le dépôt Git joue un rôle méthodologique important. Chaque phase doit se terminer par un commit cohérent. Cela permet de revenir à une baseline, de reproduire une expérience sur une version donnée et de comparer l'effet d'un contrôle sans mélanger plusieurs modifications. Les changements produits avec des assistants de programmation suivent la même règle : inspection préalable du dépôt, périmètre limité, tests, commit, arrêt avant la phase suivante.
+
+Dans un projet de sécurité basé sur des LLM, cette discipline est indispensable, car le modèle lui-même peut évoluer indépendamment du code. L'identifiant du modèle, la date, les paramètres de génération, les erreurs fournisseur et le hash Git doivent donc être enregistrés dans la campagne expérimentale finale.
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+Ce chapitre a présenté le positionnement d'AegisMCP, ses objectifs et l'organisation choisie pour le mener. L'analyse de l'existant montre que les mécanismes actuels sont utiles mais fragmentés : prompts de sûreté, permissions techniques, approbation humaine et authentification ne suffisent pas à fournir une autorisation contextuelle et traçable. La problématique retenue conduit donc à externaliser la décision de sécurité hors du LLM et à relier cette décision à une démarche de Red Teaming et de GRC. Le chapitre suivant approfondit les notions techniques et normatives nécessaires à la conception de cette solution.

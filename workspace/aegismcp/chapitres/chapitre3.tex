@@ -1,0 +1,588 @@
+\chapter{Conception du projet}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+La conception d'AegisMCP part d'un principe : un agent IA ne doit jamais disposer d'un chemin direct et implicite entre la décision du LLM et l'exécution d'une action sensible. La solution doit donc séparer le raisonnement fonctionnel, l'exposition des capacités, la décision de sécurité, l'expérimentation offensive, l'observabilité et la gouvernance. Ce chapitre formalise les besoins, les acteurs, le modèle de menace, les principaux objets de sécurité et les décisions architecturales qui découlent de ce principe.
+
+\section{Analyse des besoins}
+
+\subsection{Besoins fonctionnels}
+
+Les besoins fonctionnels décrivent ce que la plateforme doit permettre de réaliser. Ils ont été définis à partir des objectifs expérimentaux et de la nécessité de conserver une architecture modulaire.
+
+\begin{longtable}{p{1.5cm} p{4.2cm} p{8cm}}
+\caption{Besoins fonctionnels d'AegisMCP}\label{tab:besoins-fonctionnels}\\
+\toprule
+\textbf{ID} & \textbf{Besoin} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Besoin} & \textbf{Description} \\
+\midrule
+\endhead
+BF01 & Exécuter un agent & La plateforme doit permettre d'envoyer une tâche à un agent et d'observer sa réponse finale. \\
+BF02 & Utiliser des outils & Le modèle doit pouvoir proposer des appels d'outils structurés avec arguments. \\
+BF03 & Intégrer MCP & Les capacités du laboratoire doivent être exposées via des serveurs MCP afin de reproduire une architecture moderne. \\
+BF04 & Intercepter les actions & Tout appel sensible doit pouvoir être intercepté avant exécution. \\
+BF05 & Appliquer une politique & Le système doit rendre une décision ALLOW, DENY, REQUIRE\_APPROVAL, REDUCE\_SCOPE ou QUARANTINE. \\
+BF06 & Gérer la provenance & Les contenus et instructions doivent conserver une information sur leur origine et leur confiance. \\
+BF07 & Classifier les données & Les ressources manipulées doivent pouvoir être classifiées PUBLIC, INTERNAL, CONFIDENTIAL ou RESTRICTED. \\
+BF08 & Gérer la confiance MCP & Chaque serveur et outil MCP doit posséder un niveau de confiance et un statut d'approbation. \\
+BF09 & Red Teaming & Le système doit exécuter des scénarios adversariaux reproductibles et enregistrer leur résultat. \\
+BF10 & Appropriation humaine & Une action sensible doit pouvoir être suspendue et soumise à approbation. \\
+BF11 & Journaliser & Les propositions, décisions, exécutions, erreurs et résultats doivent être enregistrés. \\
+BF12 & Gérer les risques & Les résultats techniques doivent alimenter un registre de risques et un catalogue de contrôles. \\
+BF13 & Produire des preuves & Une politique et son test doivent pouvoir être associés à une preuve de contrôle. \\
+BF14 & Comparer les modèles & Le laboratoire doit permettre de changer de modèle sans réécrire l'agent. \\
+BF15 & Mesurer & La plateforme doit calculer des métriques de sécurité et d'utilité. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Besoins non fonctionnels}
+
+Les besoins non fonctionnels sont tout aussi importants dans un projet de sécurité. La plateforme doit rester explicable, testable et sûre même lorsque les expériences sont adversariales.
+
+\begin{table}[H]
+\centering
+\caption{Besoins non fonctionnels}
+\label{tab:besoins-non-fonctionnels}
+\begin{tabularx}{\textwidth}{p{2.2cm} X}
+\toprule
+\textbf{Propriété} & \textbf{Exigence} \\
+\midrule
+Sécurité & Les expériences doivent utiliser des données synthétiques et éviter les effets réels non nécessaires. \\
+Traçabilité & Chaque décision importante doit produire une trace corrélable à une session, un modèle, un outil et une politique. \\
+Reproductibilité & Les expériences doivent enregistrer paramètres, version de code, modèle, attaque et résultat. \\
+Modularité & Model provider, agent, MCP, Guard, Red, telemetry et GRC doivent être séparés. \\
+Portabilité & Le prototype doit pouvoir s'exécuter sur une machine de développement sans infrastructure lourde. \\
+Résilience & Les erreurs de fournisseur LLM doivent être gérées sans faire échouer silencieusement l'expérimentation. \\
+Performance & L'overhead introduit par Aegis Guard doit être mesurable et rester compatible avec un usage interactif. \\
+Explicabilité & Une décision DENY ou REQUIRE\_APPROVAL doit être accompagnée d'un motif compréhensible. \\
+Maintenabilité & Les politiques et classifications doivent pouvoir évoluer sans modifier le cœur de l'agent. \\
+Auditabilité & Les résultats doivent permettre de remonter de l'événement technique au risque et au contrôle associés. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Modélisation UML du système}
+
+\subsection{Diagramme de cas d'utilisation}
+
+Les acteurs principaux sont l'utilisateur, le chercheur/Red Teamer, l'approbateur humain, l'administrateur de politiques et l'auditeur GRC. Dans le prototype académique, une même personne peut cumuler plusieurs rôles, mais leur séparation conceptuelle reste nécessaire pour modéliser correctement les responsabilités.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  actor/.style={draw, circle, minimum size=0.8cm, align=center},
+  usecase/.style={draw, ellipse, minimum width=4.2cm, minimum height=0.9cm, align=center},
+  line/.style={thick}
+]
+\node[actor] (user) at (0,3) {U};
+\node[below=0.15cm of user] {Utilisateur};
+\node[actor] (red) at (0,0) {R};
+\node[below=0.15cm of red] {Red Teamer};
+\node[actor] (audit) at (0,-3) {A};
+\node[below=0.15cm of audit] {Auditeur};
+
+\node[usecase] (task) at (6,3) {Soumettre une tâche};
+\node[usecase] (tools) at (6,1.5) {Utiliser des outils MCP};
+\node[usecase] (approve) at (6,0) {Approuver une action sensible};
+\node[usecase] (attack) at (6,-1.5) {Exécuter une campagne Aegis Red};
+\node[usecase] (grc) at (6,-3) {Consulter risques, contrôles et preuves};
+
+\draw[line] (user) -- (task);
+\draw[line] (user) -- (approve);
+\draw[line] (red) -- (attack);
+\draw[line] (audit) -- (grc);
+\draw[line,dashed] (task) -- (tools);
+\draw[line,dashed] (attack) -- (tools);
+\end{tikzpicture}
+\caption{Diagramme de cas d'utilisation simplifié}
+\label{fig:usecase}
+\end{figure}
+
+\subsection{Diagramme de classes conceptuel}
+
+Le modèle de classes se concentre sur les objets de sécurité. Une \code{AgentSession} possède un but utilisateur, une identité et une liste d'événements. Le modèle produit un \code{ToolCallProposal}. Aegis Guard transforme la proposition et le contexte en \code{SecurityDecision}. Un outil appartient à un serveur MCP et possède un niveau de risque. Les données manipulées sont associées à une classification et à une provenance. Les événements techniques peuvent devenir des preuves GRC.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  cls/.style={draw, rounded corners, minimum width=3.5cm, minimum height=1.15cm, align=left, font=\small},
+  rel/.style={-{Latex[length=2mm]}, thick}
+]
+\node[cls] (session) at (0,2.8) {\textbf{AgentSession}\\session\_id\\user\_goal\\identity};
+\node[cls] (proposal) at (5,2.8) {\textbf{ToolCallProposal}\\tool\\arguments\\reason};
+\node[cls] (decision) at (10,2.8) {\textbf{SecurityDecision}\\decision\\reason\\risk\_score};
+\node[cls] (tool) at (5,0) {\textbf{Tool}\\server\_id\\risk\_level\\capabilities};
+\node[cls] (data) at (0,0) {\textbf{DataObject}\\classification\\owner\\provenance};
+\node[cls] (evidence) at (10,0) {\textbf{Evidence}\\test\_id\\control\_id\\result};
+\draw[rel] (session) -- (proposal);
+\draw[rel] (proposal) -- (decision);
+\draw[rel] (proposal) -- (tool);
+\draw[rel] (data) -- (proposal);
+\draw[rel] (decision) -- (evidence);
+\end{tikzpicture}
+\caption{Diagramme de classes conceptuel des objets de sécurité}
+\label{fig:class-diagram}
+\end{figure}
+
+\subsection{Diagramme de séquence d'un appel d'outil sécurisé}
+
+La figure~\ref{fig:sequence} met en évidence la différence entre un agent classique et AegisMCP. Le modèle ne déclenche jamais directement le serveur MCP. Il transmet d'abord une proposition à Aegis Guard.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  lifeline/.style={draw, minimum width=2.6cm, minimum height=0.8cm, align=center},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  msg/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+\node[lifeline] (u) at (0,0) {Utilisateur};
+\node[lifeline] (a) at (3.5,0) {Agent / LLM};
+\node[lifeline] (g) at (7,0) {Aegis Guard};
+\node[lifeline] (m) at (10.5,0) {MCP Gateway};
+\node[lifeline] (s) at (14,0) {Serveur MCP};
+\foreach \x in {0,3.5,7,10.5,14} {\draw[dashed] (\x,-0.45) -- (\x,-7.1);}
+\draw[arr] (0,-1) -- node[msg,above]{objectif} (3.5,-1);
+\draw[arr] (3.5,-2) -- node[msg,above]{proposition d'appel} (7,-2);
+\draw[arr] (7,-3) -- node[msg,above]{ALLOW + portée} (10.5,-3);
+\draw[arr] (10.5,-4) -- node[msg,above]{tools/call} (14,-4);
+\draw[arr] (14,-5) -- node[msg,above]{résultat} (10.5,-5);
+\draw[arr] (10.5,-6) -- node[msg,above]{résultat + métadonnées} (3.5,-6);
+\draw[arr] (3.5,-6.8) -- node[msg,above]{réponse finale} (0,-6.8);
+\end{tikzpicture}
+\caption{Séquence d'un appel d'outil passant par Aegis Guard}
+\label{fig:sequence}
+\end{figure}
+
+Si la décision est DENY, la flèche vers le MCP Gateway n'existe pas. Si la décision est REQUIRE\_APPROVAL, la séquence est suspendue et une demande d'approbation est créée.
+
+\subsection{Diagramme d'activité d'une décision Aegis Guard}
+
+La logique de décision vise à être explicite plutôt que purement statistique. Le flux conceptuel est présenté dans la figure~\ref{fig:activity-guard}.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.94\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.9cm,
+  action/.style={draw, rounded corners, text width=4.5cm, minimum height=0.8cm, align=center},
+  decision/.style={draw, diamond, aspect=2.1, align=center, inner sep=1pt, text width=3.4cm},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[action] (start) {Recevoir ToolCallProposal + contexte};
+\node[action, below=of start] (meta) {Résoudre identité, provenance, outil, donnée, destination};
+\node[decision, below=1.1cm of meta] (allowedtool) {Outil autorisé ?};
+\node[action, right=2.9cm of allowedtool] (deny1) {DENY};
+\node[decision, below=1.1cm of allowedtool] (scope) {Action nécessaire au but ?};
+\node[action, right=2.9cm of scope] (deny2) {DENY / REDUCE\_SCOPE};
+\node[decision, below=1.1cm of scope] (sensitive) {Donnée sensible ou action critique ?};
+\node[action, left=2.9cm of sensitive] (allow) {ALLOW};
+\node[action, right=2.9cm of sensitive] (approval) {REQUIRE\_APPROVAL};
+\draw[arr] (start) -- (meta);
+\draw[arr] (meta) -- (allowedtool);
+\draw[arr] (allowedtool) -- node[above]{non} (deny1);
+\draw[arr] (allowedtool) -- node[right]{oui} (scope);
+\draw[arr] (scope) -- node[above]{non} (deny2);
+\draw[arr] (scope) -- node[right]{oui} (sensitive);
+\draw[arr] (sensitive) -- node[above]{non} (allow);
+\draw[arr] (sensitive) -- node[above]{oui} (approval);
+\end{tikzpicture}%
+}
+\caption{Diagramme d'activité simplifié d'Aegis Guard}
+\label{fig:activity-guard}
+\end{figure}
+
+\subsection{Diagramme de déploiement}
+
+Le prototype privilégie une architecture légère. Les composants applicatifs peuvent fonctionner nativement sur macOS, tandis que les services d'infrastructure -- base de données ou moteur vectoriel -- peuvent être conteneurisés. Les appels vers un LLM distant passent par une couche provider afin de pouvoir ultérieurement remplacer l'API par un modèle local.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=1.3cm,
+  host/.style={draw, rounded corners, minimum width=12.8cm, minimum height=6.8cm, align=center},
+  box/.style={draw, rounded corners, text width=3.0cm, minimum height=0.9cm, align=center, fill=blue!3},
+  ext/.style={draw, rounded corners, text width=3.2cm, minimum height=0.9cm, align=center, fill=orange!6},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[host] (mac) at (0,0) {};
+\node[font=\bfseries] at (0,3) {Machine de développement};
+\node[box] (api) at (-3.6,1.6) {API / orchestrateur};
+\node[box] (guard) at (0,1.6) {Aegis Guard};
+\node[box] (red) at (3.6,1.6) {Aegis Red};
+\node[box] (mcp) at (-3.6,0) {MCP Gateway + serveurs};
+\node[box] (db) at (0,0) {PostgreSQL / télémétrie};
+\node[box] (dash) at (3.6,0) {Dashboard / GRC};
+\node[box] (rag) at (0,-1.6) {RAG / mémoire};
+\node[ext] (provider) at (8.7,1.6) {OpenRouter / LLM distant};
+\node[ext] (local) at (8.7,-0.2) {LLM local optionnel};
+\draw[arr] (api) -- (guard);
+\draw[arr] (guard) -- (mcp);
+\draw[arr] (red) -- (api);
+\draw[arr] (api) -- (db);
+\draw[arr] (guard) -- (db);
+\draw[arr] (dash) -- (db);
+\draw[arr] (rag) -- (api);
+\draw[arr] (api.east) -- ++(1,0) |- (provider.west);
+\draw[arr,dashed] (api.east) -- ++(1.4,0) |- (local.west);
+\end{tikzpicture}%
+}
+\caption{Diagramme de déploiement cible}
+\label{fig:deployment}
+\end{figure}
+
+\section{Modèle de menace}
+
+\subsection{Actifs à protéger}
+
+Le modèle de menace identifie d'abord les actifs dont la compromission aurait un impact. Les actifs principaux sont :
+
+\begin{itemize}
+    \item les données accessibles par les outils ;
+    \item les credentials et tokens d'accès ;
+    \item les politiques d'Aegis Guard ;
+    \item l'identité de l'utilisateur et de l'agent ;
+    \item les descriptions et métadonnées des outils MCP ;
+    \item la mémoire persistante et le corpus RAG ;
+    \item l'intégrité de la télémétrie et des preuves GRC ;
+    \item les mécanismes d'approbation humaine ;
+    \item la disponibilité du système et les budgets de ressources.
+\end{itemize}
+
+\subsection{Acteurs de menace}
+
+Le projet considère plusieurs catégories d'acteurs :
+
+\begin{enumerate}
+    \item \textbf{Utilisateur malveillant} : tente une injection directe ou l'abus d'une fonctionnalité légitime ;
+    \item \textbf{Auteur de contenu externe} : place une injection indirecte dans un document, une page ou une ressource ;
+    \item \textbf{Serveur MCP compromis ou malveillant} : publie une description d'outil trompeuse ou un résultat empoisonné ;
+    \item \textbf{Composant tiers compromis} : altère des données RAG, des dépendances ou des métadonnées ;
+    \item \textbf{Agent lui-même} : sans intention malveillante, produit une action erronée, excessive ou incohérente ;
+    \item \textbf{Utilisateur humain inattentif} : approuve une action dangereuse sans comprendre le contexte.
+\end{enumerate}
+
+La présence du dernier acteur souligne un aspect important : le modèle de menace n'oppose pas seulement un attaquant externe à un système fiable. Il prend aussi en compte l'erreur, l'ambiguïté et les décisions incorrectes de composants légitimes.
+
+\subsection{Frontières de confiance}
+
+AegisMCP définit les frontières suivantes :
+
+\begin{itemize}
+    \item entre le prompt système et le contenu externe ;
+    \item entre l'utilisateur et l'agent ;
+    \item entre le LLM et l'application qui exécute l'outil ;
+    \item entre l'application et chaque serveur MCP ;
+    \item entre les données internes et les destinations externes ;
+    \item entre une mémoire non vérifiée et une mémoire promue ;
+    \item entre la télémétrie brute et la preuve GRC validée.
+\end{itemize}
+
+La figure~\ref{fig:trust-boundaries} résume ces zones.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  zone/.style={draw, rounded corners, minimum width=3.2cm, minimum height=1cm, align=center},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  untrusted/.style={zone, fill=red!7},
+  trusted/.style={zone, fill=green!8},
+  controlled/.style={zone, fill=blue!7}
+]
+\node[untrusted] (content) at (0,2) {Contenu externe\\non fiable};
+\node[controlled] (agent) at (4.6,2) {LLM / Agent\\proposition};
+\node[trusted] (guard) at (9.2,2) {Aegis Guard\\politique locale};
+\node[controlled] (mcp) at (13.8,2) {MCP Gateway};
+\node[untrusted] (third) at (13.8,0) {Serveur MCP\\tiers};
+\node[trusted] (internal) at (13.8,4) {Serveur MCP\\interne approuvé};
+\draw[arr] (content) -- (agent);
+\draw[arr] (agent) -- (guard);
+\draw[arr] (guard) -- (mcp);
+\draw[arr] (mcp) -- (third);
+\draw[arr] (mcp) -- (internal);
+\end{tikzpicture}
+\caption{Frontières de confiance principales}
+\label{fig:trust-boundaries}
+\end{figure}
+
+\subsection{Catalogue d'attaques}
+
+Le catalogue initial d'Aegis Red couvre quatorze familles. Toutes ne sont pas obligatoires pour le MVP, mais elles permettent d'orienter l'architecture vers une couverture plus large que la seule prompt injection.
+
+\begin{longtable}{p{1.4cm} p{4.5cm} p{7.8cm}}
+\caption{Catalogue d'attaques Aegis Red}\label{tab:attack-catalog}\\
+\toprule
+\textbf{ID} & \textbf{Attaque} & \textbf{Objectif expérimental} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Attaque} & \textbf{Objectif expérimental} \\
+\midrule
+\endhead
+A01 & Prompt injection directe & Modifier le but par une instruction utilisateur malveillante. \\
+A02 & Prompt injection indirecte & Faire exécuter une instruction trouvée dans un document ou résultat d'outil. \\
+A03 & RAG poisoning & Insérer une instruction malveillante dans le corpus récupéré. \\
+A04 & Memory poisoning & Persister une instruction non fiable dans la mémoire. \\
+A05 & Tool description manipulation & Influencer le modèle via la description d'un outil. \\
+A06 & Tool shadowing & Faire sélectionner un outil homonyme provenant d'un serveur moins fiable. \\
+A07 & Tool-chain exfiltration & Combiner lecture et messagerie pour extraire une donnée sensible. \\
+A08 & Excessive agency & Exploiter des outils non nécessaires à la tâche. \\
+A09 & Identity / privilege abuse & Utiliser les droits d'une identité au-delà de la portée attendue. \\
+A10 & Unexpected code execution & Déclencher un sandbox ou une commande non justifiée. \\
+A11 & Communication inter-agent & Transmettre une instruction hostile à un autre agent. \\
+A12 & Cascading failure & Provoquer boucles, appels excessifs ou propagation d'erreurs. \\
+A13 & Human trust exploitation & Tromper l'utilisateur au moment de l'approbation. \\
+A14 & Rogue behavior simulation & Simuler une déviation persistante du comportement attendu. \\
+\bottomrule
+\end{longtable}
+
+\section{Conception fonctionnelle d'AegisMCP}
+
+\subsection{AI/MCP Lab}
+
+Le laboratoire représente l'environnement contrôlé dans lequel les agents opèrent. Il contient des ressources propres, des données synthétiques, des outils à niveaux de risque variés et plusieurs scénarios. Une caractéristique importante est la présence simultanée de tâches légitimes et malveillantes. Sans benchmark légitime, une défense pourrait obtenir un taux d'attaque nul simplement en bloquant tous les outils ; une telle défense serait inutilisable.
+
+Le laboratoire doit donc conserver deux suites :
+
+\begin{itemize}
+    \item \textbf{suite fonctionnelle} : tâches que l'agent doit réussir ;
+    \item \textbf{suite adversariale} : tâches dans lesquelles une source tente de détourner l'agent.
+\end{itemize}
+
+\subsection{Aegis Red}
+
+Aegis Red ne se limite pas à un ensemble de prompts. Il doit être un harness expérimental capable de :
+
+\begin{itemize}
+    \item charger un scénario ;
+    \item réinitialiser l'état du laboratoire ;
+    \item sélectionner un modèle ;
+    \item exécuter N répétitions ;
+    \item mesurer les accès, appels et exfiltrations ;
+    \item classer le résultat ;
+    \item enregistrer la configuration complète ;
+    \item produire un tableau de synthèse.
+\end{itemize}
+
+Un résultat peut être classé plus finement que succès/échec : \code{ATTACK\_FAILED}, \code{GOAL\_HIJACKED}, \code{PRIVATE\_DATA\_ACCESSED}, \code{EXFILTRATION\_ATTEMPTED}, \code{FULL\_COMPROMISE} ou \code{MODEL\_ERROR}. Cette granularité évite de perdre l'information lorsqu'une attaque n'atteint qu'une étape intermédiaire.
+
+\subsection{Aegis Guard}
+
+Aegis Guard reçoit un contexte de décision. Le schéma conceptuel est le suivant :
+
+\begin{lstlisting}[language=Python,caption={Pseudo-code conceptuel d'Aegis Guard}]
+decision = guard.evaluate(
+    user_goal=user_goal,
+    identity=identity,
+    tool=tool,
+    arguments=arguments,
+    instruction_provenance=provenance,
+    data_classification=data_classification,
+    destination=destination,
+    server_trust=server_trust,
+    explicit_authorization=authorization,
+)
+
+if decision == "ALLOW":
+    execute_tool()
+elif decision == "REQUIRE_APPROVAL":
+    suspend_and_request_human_approval()
+else:
+    block_and_log()
+\end{lstlisting}
+
+Le moteur de politique doit être déterministe pour les règles critiques. Un LLM peut éventuellement aider à produire une explication ou à classifier un texte ambigu, mais la décision finale ne doit pas reposer sur un second modèle non maîtrisé.
+
+\subsection{Modèle de provenance}
+
+La provenance est attachée aux informations traversant le système. Le but n'est pas de suivre chaque token, mais de conserver suffisamment de contexte pour appliquer des règles significatives. Un objet de provenance peut contenir :
+
+\begin{itemize}
+    \item \code{source\_type} ;
+    \item \code{source\_id} ;
+    \item \code{trust\_level} ;
+    \item \code{created\_at} ;
+    \item \code{parent\_sources} ;
+    \item \code{integrity\_status} ;
+    \item \code{expiration}.
+\end{itemize}
+
+Lorsqu'un contenu est dérivé de plusieurs sources, le système peut adopter la confiance minimale ou une politique spécifique. Par exemple, un résumé généré à partir d'un document non fiable reste \code{DERIVED\_CONTENT} et ne devient pas automatiquement \code{TRUSTED\_SYSTEM}.
+
+\subsection{Modèle de classification des données}
+
+La classification vise à protéger les flux sortants et les accès. Le tableau~\ref{tab:data-classification} donne les règles générales proposées.
+
+\begin{table}[H]
+\centering
+\caption{Classification des données proposée}
+\label{tab:data-classification}
+\begin{tabularx}{\textwidth}{p{2.6cm} p{4cm} X}
+\toprule
+\textbf{Niveau} & \textbf{Exemple} & \textbf{Principe de traitement} \\
+\midrule
+PUBLIC & Documentation publique, données de démonstration publiables & Lecture et partage généralement autorisés sous réserve du but. \\
+INTERNAL & Notes internes, configuration non sensible & Partage externe limité et journalisé. \\
+CONFIDENTIAL & Données métier, résultats privés, secrets non critiques & Accès selon rôle ; sortie externe soumise à contrôle renforcé. \\
+RESTRICTED & Credentials, données hautement sensibles, secrets critiques & Accès minimal, approbation ou blocage pour toute sortie à haut risque. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Modèle de risque des outils}
+
+Les outils sont classés en quatre niveaux : LOW, MEDIUM, HIGH et CRITICAL. Le niveau dépend des effets possibles et non de la fréquence d'utilisation.
+
+\begin{table}[H]
+\centering
+\caption{Exemple de classification des outils}
+\label{tab:tool-risk}
+\begin{tabularx}{\textwidth}{p{3.2cm} p{2.5cm} X}
+\toprule
+\textbf{Outil} & \textbf{Risque} & \textbf{Justification} \\
+\midrule
+search\_documents & LOW & Recherche en lecture seule dans un corpus contrôlé. \\
+read\_document & MEDIUM & Peut accéder à une ressource sensible selon le document. \\
+send\_message & HIGH & Peut créer un flux sortant et exfiltrer des données. \\
+database\_write & HIGH & Modifie un état métier persistant. \\
+shell\_execute & CRITICAL & Peut entraîner exécution de code, accès système ou mouvement latéral. \\
+credential\_manage & CRITICAL & Impact direct sur l'identité et les privilèges. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Décision de sécurité}
+
+Une décision Aegis contient au minimum :
+
+\begin{itemize}
+    \item le verdict ;
+    \item l'identifiant de politique ;
+    \item un score ou niveau de risque ;
+    \item une justification ;
+    \item les conditions imposées ;
+    \item les métadonnées nécessaires à l'audit.
+\end{itemize}
+
+Les verdicts sont :
+
+\begin{description}
+    \item[ALLOW] l'action respecte la politique et peut être exécutée ;
+    \item[DENY] l'action est interdite ;
+    \item[REQUIRE\_APPROVAL] une validation humaine est requise ;
+    \item[REDUCE\_SCOPE] l'action peut être exécutée avec des arguments ou données réduits ;
+    \item[QUARANTINE] le contenu ou serveur est isolé pour analyse.
+\end{description}
+
+\section{Conception du volet GRC}
+
+\subsection{Rôles de gouvernance}
+
+Le modèle GRC introduit des rôles conceptuels qui peuvent être cumulés dans le prototype académique : propriétaire du système IA, responsable sécurité IA, développeur, propriétaire d'outil MCP, propriétaire de risque, propriétaire de données, approbateur humain et auditeur. Cette modélisation prépare le passage à un environnement organisationnel où les responsabilités doivent être distinctes.
+
+\subsection{Registre des risques}
+
+Un risque est représenté par : actif, scénario, vraisemblance, impact, niveau inhérent, contrôles associés, propriétaire, traitement, preuves et niveau résiduel. La matrice de base utilise une échelle de 1 à 5 :
+
+\begin{equation}
+Risque = Vraisemblance \times Impact
+\end{equation}
+
+La simplicité de cette formule facilite l'explication, mais le score n'est pas présenté comme une vérité scientifique absolue. Son rôle est de rendre cohérente la priorisation et de comparer l'effet des contrôles.
+
+\begin{table}[H]
+\centering
+\caption{Extrait du registre de risques initial}
+\label{tab:risk-register}
+\begin{tabularx}{\textwidth}{p{1.2cm} p{4.3cm} p{1.2cm} p{1.2cm} p{1.5cm} X}
+\toprule
+\textbf{ID} & \textbf{Risque} & \textbf{L} & \textbf{I} & \textbf{Score} & \textbf{Traitement principal} \\
+\midrule
+R01 & Injection indirecte entraînant une action non autorisée & 4 & 5 & 20 & Provenance + Guard + moindre autonomie \\
+R02 & Exfiltration de données via messagerie & 3 & 5 & 15 & Classification + contrôle de destination + HITL \\
+R03 & Serveur MCP tiers malveillant & 3 & 5 & 15 & Allowlist, trust level, inventaire et validation \\
+R04 & Mémoire empoisonnée persistante & 3 & 4 & 12 & Labels de provenance, expiration et promotion contrôlée \\
+R05 & Abus d'identité privilégiée & 2 & 5 & 10 & Scopes temporaires et séparation de rôles \\
+R06 & Défaillance fournisseur LLM & 4 & 2 & 8 & Retry, erreurs explicites, multi-provider et journalisation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Catalogue de contrôles}
+
+Le catalogue Aegis associe chaque contrôle à un objectif, un mécanisme technique, une méthode de test et une preuve. Exemples :
+
+\begin{table}[H]
+\centering
+\caption{Exemples de contrôles Aegis}
+\label{tab:aegis-controls}
+\begin{tabularx}{\textwidth}{p{1.5cm} p{4cm} X}
+\toprule
+\textbf{ID} & \textbf{Contrôle} & \textbf{Preuve attendue} \\
+\midrule
+AC-01 & Interception obligatoire des appels sensibles & Trace montrant proposition, décision Guard et absence d'exécution en cas de DENY. \\
+AC-02 & Classification des données & Inventaire des ressources et labels associés. \\
+AC-03 & Contrôle des destinations externes & Test bloquant l'envoi d'une donnée RESTRICTED vers une adresse externe. \\
+AC-04 & Confiance des serveurs MCP & Inventaire + statut approuvé/non approuvé + test d'un serveur non autorisé. \\
+AC-05 & Human approval & Journal de demande et de décision utilisateur pour une action HIGH/CRITICAL. \\
+AC-06 & Télémétrie immuable/logique & Événements corrélés avec session, action, verdict et horodatage. \\
+AC-07 & Limite d'autonomie & Test d'un agent tentant des appels non nécessaires à la tâche. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Chaîne de preuve}
+
+La chaîne de preuve GRC est conçue comme suit :
+
+\begin{center}
+\textbf{Exigence $\rightarrow$ Contrôle $\rightarrow$ Implémentation $\rightarrow$ Test $\rightarrow$ Preuve $\rightarrow$ Efficacité $\rightarrow$ Risque résiduel}
+\end{center}
+
+Cette chaîne est un élément différenciateur du projet. Elle évite qu'un registre de risques soit séparé des données techniques. Une campagne Aegis Red peut créer une constatation, celle-ci est liée à un risque, un contrôle est appliqué, l'attaque est rejouée, puis l'efficacité du contrôle influence le risque résiduel.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.94\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=0.6cm,
+  box/.style={draw, rounded corners, text width=1.8cm, minimum height=0.75cm, align=center, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (red) {Aegis Red\\finding};
+\node[box, right=of red] (risk) {Risque};
+\node[box, right=of risk] (control) {Contrôle};
+\node[box, right=of control] (test) {Re-test};
+\node[box, right=of test] (evidence) {Preuve};
+\node[box, right=of evidence] (residual) {Risque\\résiduel};
+\draw[arr] (red) -- (risk);
+\draw[arr] (risk) -- (control);
+\draw[arr] (control) -- (test);
+\draw[arr] (test) -- (evidence);
+\draw[arr] (evidence) -- (residual);
+\end{tikzpicture}%
+}
+\caption{Boucle technique et GRC d'AegisMCP}
+\label{fig:grc-loop}
+\end{figure}
+
+\section{Hypothèses de recherche}
+
+Les principales hypothèses à tester lors de l'évaluation finale sont :
+
+\begin{description}
+    \item[H1] Une baseline qui exécute automatiquement les appels d'outils présente un taux de compromission supérieur à une version protégée par une politique déterministe.
+    \item[H2] La provenance et la classification des données permettent de bloquer des chaînes d'exfiltration sans bloquer la majorité des tâches légitimes.
+    \item[H3] Les contrôles d'exécution restent utiles même lorsque le modèle sous-jacent résiste déjà à certaines prompt injections.
+    \item[H4] Une politique indépendante du modèle réduit la variance de sécurité entre différents LLM.
+    \item[H5] La génération automatique de preuves à partir des événements techniques améliore la traçabilité du risque et l'évaluation de l'efficacité des contrôles.
+\end{description}
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+La conception d'AegisMCP sépare volontairement le raisonnement du LLM de l'autorisation. Les besoins fonctionnels et non fonctionnels conduisent à une architecture modulaire centrée sur la provenance, la classification, le risque d'outil, la confiance MCP et l'audit. Le modèle GRC est directement lié au flux technique afin de conserver une chaîne de preuve entre attaque, contrôle et risque résiduel. Le chapitre suivant décrit l'infrastructure et les choix technologiques retenus pour réaliser cette architecture sans dépendre d'une infrastructure lourde.

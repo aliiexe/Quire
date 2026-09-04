@@ -1,0 +1,9 @@
+{
+  "id": "aegismcp",
+  "name": "AegisMCP",
+  "rootFile": "main.tex",
+  "compiler": "pdflatex",
+  "autoCompile": true,
+  "autoCompileDelayMs": 800,
+  "synctex": true
+}

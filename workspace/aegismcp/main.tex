@@ -1,0 +1,223 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+% ------------------------------------------------------------
+% Encodage et langue
+% ------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ------------------------------------------------------------
+% Mise en page
+% ------------------------------------------------------------
+\usepackage{geometry}
+\geometry{left=3cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\usepackage{setspace}
+\setstretch{1.3}
+\usepackage{parskip}
+\setlength{\parindent}{1.2em}
+\setlength{\parskip}{0.25em}
+
+% ------------------------------------------------------------
+% Tableaux, figures et graphes
+% ------------------------------------------------------------
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{adjustbox}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc}
+\usepackage{pgfgantt}
+
+% ------------------------------------------------------------
+% Mathématiques et listes
+% ------------------------------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+
+% ------------------------------------------------------------
+% Code source
+% ------------------------------------------------------------
+\usepackage{listings}
+\definecolor{codebg}{RGB}{247,247,247}
+\definecolor{codeframe}{RGB}{210,210,210}
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=4,
+  captionpos=b
+}
+
+% ------------------------------------------------------------
+% En-têtes, titres et liens
+% ------------------------------------------------------------
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xurl}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue,
+  pdftitle={AegisMCP - Rapport de projet},
+  pdfauthor={Ali Bourak et Younes Tarik}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small AegisMCP}
+\fancyhead[R]{\small Ali Bourak \& Younes Tarik}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
+
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\Large}
+  {\chaptername\ \thechapter}{0.6em}{\Huge}
+
+% ------------------------------------------------------------
+% Commandes utiles
+% ------------------------------------------------------------
+\newcommand{\Aegis}{\textbf{AegisMCP}}
+\newcommand{\Guard}{\textit{Aegis Guard}}
+\newcommand{\Red}{\textit{Aegis Red}}
+\newcommand{\GRC}{\textit{Aegis GRC}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\riskhigh}{\cellcolor{red!15}\textbf{Élevé}}
+\newcommand{\riskmedium}{\cellcolor{orange!15}\textbf{Moyen}}
+\newcommand{\risklow}{\cellcolor{green!15}\textbf{Faible}}
+
+\begin{document}
+
+% ============================================================
+% PAGE DE GARDE
+% ============================================================
+\begin{titlepage}
+    \centering
+    \vspace*{0.8cm}
+
+    {\Large \textbf{Rapport de projet de cybersécurité}}\\[1.4cm]
+
+    {\Huge \textbf{AegisMCP}}\\[0.6cm]
+
+    {\Large
+    Conception et évaluation d'un framework Zero-Trust de sécurisation,
+    de Red Teaming et de gouvernance des risques pour les agents IA
+    autonomes utilisant le Model Context Protocol
+    }\\[1.8cm]
+
+    \rule{0.75\textwidth}{0.6pt}\\[1.4cm]
+
+    \begin{tabular}{rl}
+        \textbf{Réalisé par :} & Ali Bourak \\
+                               & Younes Tarik \\[0.6cm]
+        \textbf{Encadré par :} & \textit{Pr. Chawki El Balmani} \\[0.6cm]
+        \textbf{Établissement :} & \textit{À compléter} \\
+        \textbf{Filière :} & Cybersécurité \\
+    \end{tabular}
+
+    \vfill
+
+    {\large Année universitaire 2026--2027}\\[0.3cm]
+    {\small Version du 3 septembre 2026}
+\end{titlepage}
+
+% ============================================================
+% PAGES PRÉLIMINAIRES
+% ============================================================
+\pagenumbering{roman}
+
+\chapter*{Remerciements}
+\addcontentsline{toc}{chapter}{Remerciements}
+Nous tenons à remercier notre encadrant(e) pour l'accompagnement méthodologique et les orientations apportées durant la réalisation de ce projet. Nous remercions également l'équipe pédagogique pour le cadre de travail proposé, ainsi que toutes les personnes ayant contribué, directement ou indirectement, aux échanges techniques et à la réflexion autour de la sécurité des systèmes d'intelligence artificielle autonomes.
+
+Ce projet a été mené en binôme par \textbf{Ali Bourak} et \textbf{Younes Tarik}. Il nous a permis de mobiliser des compétences complémentaires en cybersécurité, développement logiciel, intelligence artificielle, architecture des systèmes et gouvernance des risques.
+
+\chapter*{Résumé}
+\addcontentsline{toc}{chapter}{Résumé}
+Les agents d'intelligence artificielle modernes ne se limitent plus à générer du texte. Ils peuvent planifier des tâches, interroger des bases documentaires, accéder à des API, manipuler des fichiers et déclencher des actions au travers d'outils externes. Cette autonomie crée une nouvelle surface d'attaque : un modèle peut être amené à proposer une action dangereuse à la suite d'une instruction malveillante contenue dans un document, d'une ressource RAG, d'une mémoire compromise ou d'un serveur d'outils non fiable.
+
+Le projet \Aegis{} propose une plateforme expérimentale pour étudier et réduire ces risques dans les environnements d'agents utilisant le \textit{Model Context Protocol} (MCP). L'architecture repose sur quatre piliers : un laboratoire d'agents et de serveurs MCP, un module de Red Teaming nommé \Red{}, une couche de contrôle d'exécution appelée \Guard{}, et un volet de gouvernance, risques et conformité nommé \GRC{}. Le principe central est que le modèle peut \emph{proposer} une action, mais qu'il ne constitue jamais l'autorité finale qui décide de son exécution.
+
+Le rapport présente l'état de l'art des systèmes agentiques, les menaces propres aux appels d'outils et au MCP, la modélisation de la solution, l'architecture Zero-Trust retenue, les mécanismes de provenance et de classification des données, ainsi qu'une méthodologie expérimentale permettant de comparer un agent non protégé à un agent contrôlé par Aegis Guard. Les premiers essais réalisés avec un modèle hébergé via OpenRouter montrent qu'une injection indirecte simple n'aboutit pas systématiquement à une compromission, ce qui confirme la nécessité d'une évaluation multi-variantes et multi-modèles. Le projet privilégie donc une défense indépendante du comportement aléatoire du LLM : les décisions de sécurité doivent être déterministes, traçables et justifiables.
+
+\textbf{Mots-clés :} agents IA, MCP, cybersécurité, prompt injection, tool poisoning, Zero-Trust, Red Teaming, GRC, contrôle d'accès, provenance, LLM.
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+Modern AI agents no longer only generate text. They can plan tasks, query document stores, call APIs, access files and trigger actions through external tools. This autonomy creates a new attack surface: an agent may propose a dangerous action after processing malicious instructions embedded in documents, retrieved RAG content, poisoned memory or an untrusted tool server.
+
+\Aegis{} is an experimental cybersecurity platform designed to study and mitigate these risks for autonomous agents using the Model Context Protocol (MCP). The architecture is organized around four pillars: an AI/MCP laboratory, an adversarial testing module named \Red{}, an execution-control layer named \Guard{}, and a Governance, Risk and Compliance workstream named \GRC{}. Its core principle is simple: the LLM may propose an action, but it must never be the final authority that decides whether the action is executed.
+
+This report covers the state of the art, the threat model, system design, the proposed Zero-Trust architecture, provenance and data-classification mechanisms, and an experimental methodology comparing an unprotected agent with an Aegis-protected one. Preliminary experiments demonstrate that basic indirect prompt injections are model-dependent and do not always succeed, reinforcing the need for deterministic security controls outside the model itself.
+
+\textbf{Keywords:} AI agents, MCP, cybersecurity, prompt injection, tool poisoning, Zero-Trust, Red Teaming, GRC, access control, provenance, LLM.
+
+\tableofcontents
+\clearpage
+
+\listoffigures
+\addcontentsline{toc}{chapter}{Liste des figures}
+\clearpage
+
+\listoftables
+\addcontentsline{toc}{chapter}{Liste des tableaux}
+\clearpage
+
+\chapter*{Liste des abréviations}
+\addcontentsline{toc}{chapter}{Liste des abréviations}
+\begin{longtable}{p{3cm} p{10.5cm}}
+\textbf{ABAC} & Attribute-Based Access Control \\
+\textbf{AI RMF} & Artificial Intelligence Risk Management Framework \\
+\textbf{API} & Application Programming Interface \\
+\textbf{ASR} & Attack Success Rate \\
+\textbf{GRC} & Governance, Risk and Compliance \\
+\textbf{HITL} & Human in the Loop \\
+\textbf{IA} & Intelligence Artificielle \\
+\textbf{ISO} & International Organization for Standardization \\
+\textbf{JSON-RPC} & JavaScript Object Notation - Remote Procedure Call \\
+\textbf{KPI} & Key Performance Indicator \\
+\textbf{KRI} & Key Risk Indicator \\
+\textbf{LLM} & Large Language Model \\
+\textbf{MCP} & Model Context Protocol \\
+\textbf{NIST} & National Institute of Standards and Technology \\
+\textbf{OWASP} & Open Worldwide Application Security Project \\
+\textbf{PDCA} & Plan -- Do -- Check -- Act \\
+\textbf{RAG} & Retrieval-Augmented Generation \\
+\textbf{RBAC} & Role-Based Access Control \\
+\textbf{UML} & Unified Modeling Language \\
+\textbf{Zero-Trust} & Modèle de sécurité dans lequel aucune demande n'est implicitement fiable \\
+\end{longtable}
+
+\clearpage
+\pagenumbering{arabic}
+
+% ============================================================
+% CORPS DU RAPPORT
+% ============================================================
+\input{chapitres/introduction_generale}
+\input{chapitres/chapitre1}
+\input{chapitres/chapitre2}
+\input{chapitres/chapitre3}
+\input{chapitres/chapitre4}
+\input{chapitres/chapitre5}
+\input{chapitres/conclusion_generale}
+\input{chapitres/bibliographie}
+
+\end{document}

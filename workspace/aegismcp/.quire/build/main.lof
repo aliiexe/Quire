@@ -1,0 +1,20 @@
+\babel@toc {french}{}\relax 
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Diagramme de Gantt indicatif du projet}}{12}{figure.caption.17}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces Boucle simplifiée d'un agent utilisant des outils}}{15}{figure.caption.19}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Architecture MCP simplifiée envisagée pour AegisMCP}}{18}{figure.caption.20}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Diagramme de cas d'utilisation simplifié}}{31}{figure.caption.24}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Diagramme de classes conceptuel des objets de sécurité}}{31}{figure.caption.25}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Séquence d'un appel d'outil passant par Aegis Guard}}{32}{figure.caption.26}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Diagramme d'activité simplifié d'Aegis Guard}}{33}{figure.caption.27}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Diagramme de déploiement cible}}{33}{figure.caption.28}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Frontières de confiance principales}}{35}{figure.caption.29}%
+\contentsline {figure}{\numberline {3.7}{\ignorespaces Boucle technique et GRC d'AegisMCP}}{42}{figure.caption.34}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Architecture globale cible d'AegisMCP}}{48}{figure.caption.37}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Architecture interne simplifiée d'Aegis Guard}}{50}{figure.caption.38}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Flux réellement implémenté dans la baseline actuelle}}{64}{figure.caption.45}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Flux cible après intégration d'Aegis Guard}}{65}{figure.caption.46}%

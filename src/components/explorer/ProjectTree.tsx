@@ -9,10 +9,12 @@ interface ProjectTreeProps {
   nodes: ProjectNode[];
   selectedPath?: string;
   onSelect: (path: string) => void;
+  onDelete?: (node: ProjectNode) => void;
+  onSetMainDocument?: (path: string) => void;
   level?: number;
 }
 
-export function ProjectTree({ nodes, selectedPath, onSelect, level = 0 }: ProjectTreeProps) {
+export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMainDocument, level = 0 }: ProjectTreeProps) {
   const { expandedFolders, toggleFolder, isDirty } = useWorkspaceStore();
   
   if (!nodes || nodes.length === 0) return null;
@@ -78,16 +80,22 @@ export function ProjectTree({ nodes, selectedPath, onSelect, level = 0 }: Projec
                     className="min-w-[160px] bg-[var(--quire-surface)] border border-[var(--quire-border)] rounded-[10px] p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-50 text-[13px] text-[var(--quire-text)] font-medium transition-all duration-150 ease-out"
                     align="end"
                   >
-                    <DropdownMenu.Item className="px-2 py-1.5 outline-none cursor-pointer rounded hover:bg-[var(--quire-bg)] hover:text-[var(--quire-text)]">
-                      Rename
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item className="px-2 py-1.5 outline-none cursor-pointer rounded hover:bg-[var(--quire-bg)] hover:text-[var(--quire-red)] text-[var(--quire-red)]">
+                    <DropdownMenu.Item
+                      className="px-2 py-1.5 outline-none cursor-pointer rounded hover:bg-[var(--quire-bg)] hover:text-[var(--quire-red)] text-[var(--quire-red)]"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        onDelete?.(node);
+                      }}
+                    >
                       Delete
                     </DropdownMenu.Item>
                     {!isDir && node.name.endsWith('.tex') && (
                       <>
                         <DropdownMenu.Separator className="h-px bg-[var(--quire-border)] my-1" />
-                        <DropdownMenu.Item className="px-2 py-1.5 outline-none cursor-pointer rounded hover:bg-[var(--quire-bg)] hover:text-[var(--quire-text)]">
+                        <DropdownMenu.Item
+                          className="px-2 py-1.5 outline-none cursor-pointer rounded hover:bg-[var(--quire-bg)] hover:text-[var(--quire-text)]"
+                          onSelect={() => onSetMainDocument?.(node.path)}
+                        >
                           Set as main document
                         </DropdownMenu.Item>
                       </>
@@ -107,6 +115,8 @@ export function ProjectTree({ nodes, selectedPath, onSelect, level = 0 }: Projec
                     nodes={node.children} 
                     selectedPath={selectedPath} 
                     onSelect={onSelect}
+                    onDelete={onDelete}
+                    onSetMainDocument={onSetMainDocument}
                     level={level + 1}
                   />
                 </div>

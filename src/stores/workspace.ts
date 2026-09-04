@@ -22,6 +22,7 @@ interface WorkspaceState {
   toggleFolder: (path: string) => void;
   openFile: (path: string, content: string) => void;
   closeFile: (path: string) => void;
+  forgetPath: (path: string) => void;
   updateFileContent: (path: string, content: string) => void;
   setSaving: (saving: boolean) => void;
   markSaved: (path: string) => void;
@@ -44,10 +45,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   diagnostics: [],
 
   setProject: (project) => {
-    // Try to restore expandedFolders state for this project
     const stored = localStorage.getItem(`quire:project:${project.id}:tree-state`);
     const expandedFolders = stored ? JSON.parse(stored) : {};
-    set({ project, expandedFolders });
+    const isSameProject = get().project?.id === project.id;
+
+    // File paths such as "main.tex" repeat across projects. Resetting the
+    // document state on a project change prevents stale text, diagnostics, and
+    // compile state from leaking into the newly opened document.
+    set(isSameProject ? { project, expandedFolders } : {
+      project,
+      tree: [],
+      activeFile: null,
+      openFiles: [],
+      fileContents: {},
+      isDirty: {},
+      expandedFolders,
+      isSaving: false,
+      isCompiling: false,
+      pdfRevision: 0,
+      diagnostics: [],
+    });
   },
   
   setTree: (tree) => set({ tree }),
@@ -86,6 +103,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? (newOpenFiles.length > 0 ? newOpenFiles[newOpenFiles.length - 1] : null) 
         : state.activeFile
     };
+  }),
+
+  forgetPath: (path) => set((state) => {
+    const matchesPath = (candidate: string) => candidate === path || candidate.startsWith(`${path}/`);
+    const openFiles = state.openFiles.filter((candidate) => !matchesPath(candidate));
+    const fileContents = Object.fromEntries(Object.entries(state.fileContents).filter(([candidate]) => !matchesPath(candidate)));
+    const isDirty = Object.fromEntries(Object.entries(state.isDirty).filter(([candidate]) => !matchesPath(candidate)));
+    const activeFile = state.activeFile && matchesPath(state.activeFile)
+      ? (openFiles[openFiles.length - 1] ?? null)
+      : state.activeFile;
+
+    return { openFiles, fileContents, isDirty, activeFile };
   }),
   
   updateFileContent: (path, content) => set((state) => ({

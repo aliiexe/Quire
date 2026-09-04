@@ -14,7 +14,10 @@ export interface ProjectNode {
 
 export interface CreateProjectInput {
   name: string;
-  template?: "blank" | "article" | "report";
+  template?: "blank" | "article" | "report" | "thesis";
+  compiler?: Project["compiler"];
+  autoCompile?: boolean;
+  synctex?: boolean;
 }
 
 export interface Project {
@@ -22,6 +25,7 @@ export interface Project {
   name: string;
   rootFile: string;
   compiler: "pdflatex" | "xelatex" | "lualatex";
+  autoSave: boolean;
   autoCompile: boolean;
   autoCompileDelayMs: number;
   synctex: boolean;
@@ -33,6 +37,7 @@ export interface FileContent {
 
 export interface ProjectStorage {
   listProjects(): Promise<ProjectSummary[]>;
+  removeProject(projectId: string): Promise<void>;
   createProject(input: CreateProjectInput): Promise<Project>;
   getProject(projectId: string): Promise<Project>;
   updateProject(projectId: string, updates: Partial<Omit<Project, "id">>): Promise<Project>;

@@ -124,12 +124,32 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
             <div className="space-y-3">
               <label className="font-medium text-[var(--quire-text-secondary)] uppercase tracking-wider text-[11px]">Behavior</label>
               <div className="bg-[var(--quire-surface-secondary)] border border-[var(--quire-border)] rounded-xl overflow-hidden divide-y divide-[var(--quire-border)]">
+
+                {/* Auto Save */}
+                <div className="flex items-center justify-between p-3.5">
+                  <div className="flex flex-col">
+                    <label className="font-medium cursor-pointer" htmlFor="autoSaveToggle">Auto save</label>
+                    <span className="text-[11px] text-[var(--quire-muted)]">Save edits after a short pause</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      id="autoSaveToggle"
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={project.autoSave}
+                      onChange={(e) => onUpdate(e.target.checked
+                        ? { autoSave: true }
+                        : { autoSave: false, autoCompile: false })}
+                    />
+                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
+                  </label>
+                </div>
                 
                 {/* Auto Compile */}
                 <div className="flex items-center justify-between p-3.5">
                   <div className="flex flex-col">
                     <label className="font-medium cursor-pointer" htmlFor="autoCompileToggle">Auto compile</label>
-                    <span className="text-[11px] text-[var(--quire-muted)]">Compile automatically on save</span>
+                    <span className="text-[11px] text-[var(--quire-muted)]">Compile automatically after saving</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 
@@ -137,9 +157,12 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
                       type="checkbox" 
                       className="sr-only peer"
                       checked={project.autoCompile}
-                      onChange={(e) => onUpdate({ autoCompile: e.target.checked })}
+                      disabled={!project.autoSave}
+                      onChange={(e) => onUpdate(e.target.checked
+                        ? { autoSave: true, autoCompile: true }
+                        : { autoCompile: false })}
                     />
-                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
+                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-disabled:opacity-45 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
                   </label>
                 </div>
 

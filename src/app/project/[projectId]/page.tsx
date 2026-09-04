@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, PanelImperativeHandle } from "react-resizable-panels";
 import { useRef } from "react";
-import { Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { FilePlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
+import * as Dialog from "@radix-ui/react-dialog";
 import { QuireMark } from "@/components/brand/logo";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { ProjectTree } from "@/components/explorer/ProjectTree";
@@ -12,9 +13,10 @@ import { QuickOpen } from "@/components/explorer/QuickOpen";
 import { Editor } from "@/components/editor/Editor";
 import { PDFViewer } from "@/components/preview/PDFViewer";
 import { SettingsModal } from "@/components/workspace/SettingsModal";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { LatexDiagnostic } from "@/lib/compiler/compiler";
-import type { Project } from "@/lib/projects/storage";
+import type { Project, ProjectNode } from "@/lib/projects/storage";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 
 const EDITABLE_TEXT_EXTENSIONS = new Set([".tex", ".txt", ".bib", ".sty", ".cls", ".md", ".json", ".yaml", ".yml"]);
 
@@ -23,16 +25,39 @@ function isEditableTextFile(path: string) {
   return EDITABLE_TEXT_EXTENSIONS.has(extension);
 }
 
+type DesktopMenuCommand =
+  | { type: "new-file" | "save-all" | "recompile" | "export-pdf" | "toggle-explorer" }
+  | { type: "set-auto-save" | "set-auto-compile"; enabled: boolean };
+
+type DesktopBridge = {
+  setMenuState?: (state: { autoSave: boolean; autoCompile: boolean }) => void;
+  onMenuCommand?: (listener: (command: DesktopMenuCommand) => void) => () => void;
+  savePdf?: (input: { projectId: string; filename: string }) => Promise<{ cancelled: boolean; path?: string }>;
+  trashProjectItem?: (input: { projectId: string; path: string }) => Promise<{ trashed: boolean }>;
+  setWindowAppearance?: (appearance: "light" | "dark") => Promise<void>;
+};
+
+function desktopBridge() {
+  return (window as Window & { quireDesktop?: DesktopBridge }).quireDesktop;
+}
+
 export default function Workspace() {
   const params = useParams() as { projectId: string };
   const [isQuickOpen, setIsQuickOpen] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNewFile, setShowNewFile] = useState(false);
+  const [newFilePath, setNewFilePath] = useState("");
+  const [newFileError, setNewFileError] = useState("");
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
+  const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
+  const [unsavedAction, setUnsavedAction] = useState<{ type: "dashboard" } | { type: "close-file"; path: string } | null>(null);
   const explorerPanelRef = useRef<PanelImperativeHandle>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const compileInFlightRef = useRef(false);
   const autoCompileWasEnabledRef = useRef(false);
+  const automaticallyOpenedProjectRef = useRef<string | null>(null);
+  const router = useRouter();
   
   useEffect(() => {
     const stored = localStorage.getItem('quire:sidebar-collapsed');
@@ -45,7 +70,7 @@ export default function Workspace() {
     }
   }, []);
 
-  const toggleExplorer = () => {
+  const toggleExplorer = useCallback(() => {
     if (explorerPanelRef.current) {
       if (isExplorerCollapsed) {
         explorerPanelRef.current.expand();
@@ -57,25 +82,34 @@ export default function Workspace() {
         localStorage.setItem('quire:sidebar-collapsed', 'true');
       }
     }
-  };
+  }, [isExplorerCollapsed]);
   const { 
     project, tree, activeFile, openFiles, fileContents, isDirty, isSaving, isCompiling, pdfRevision, diagnostics,
-    setProject, setTree, setActiveFile, openFile, closeFile, updateFileContent, markSaved, setSaving, setCompiling, setDiagnostics, incrementPdfRevision
+    setProject, setTree, setActiveFile, openFile, closeFile, forgetPath, updateFileContent, markSaved, setSaving, setCompiling, setDiagnostics, incrementPdfRevision
   } = useWorkspaceStore();
 
   // Load project
   useEffect(() => {
-    fetch(`/api/projects/${params.projectId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (!data.error) setProject(data);
-      });
-      
-    fetch(`/api/projects/${params.projectId}/tree`)
-      .then(res => res.json())
-      .then(data => {
-        if (!data.error) setTree(data);
-      });
+    let cancelled = false;
+
+    const loadProject = async () => {
+      try {
+        const projectResponse = await fetch(`/api/projects/${params.projectId}`);
+        const nextProject = await projectResponse.json();
+        if (cancelled || nextProject.error) return;
+
+        setProject(nextProject);
+
+        const treeResponse = await fetch(`/api/projects/${params.projectId}/tree`);
+        const nextTree = await treeResponse.json();
+        if (!cancelled && !nextTree.error) setTree(nextTree);
+      } catch (error) {
+        console.error("Failed to load project", error);
+      }
+    };
+
+    void loadProject();
+    return () => { cancelled = true; };
   }, [params.projectId, setProject, setTree]);
 
   const saveDirtyFiles = useCallback(async (paths: string[]) => {
@@ -139,6 +173,13 @@ export default function Workspace() {
     }
   }, [incrementPdfRevision, isDirty, params.projectId, saveDirtyFiles, setCompiling, setDiagnostics]);
 
+  const refreshTree = useCallback(async () => {
+    const response = await fetch(`/api/projects/${params.projectId}/tree`);
+    const nextTree = await response.json();
+    if (!response.ok || nextTree.error) throw new Error(nextTree.error || "Unable to refresh the file list");
+    setTree(nextTree);
+  }, [params.projectId, setTree]);
+
   // Handle file selection
   const handleSelectFile = useCallback(async (path: string) => {
     if (!isEditableTextFile(path)) return;
@@ -156,6 +197,15 @@ export default function Workspace() {
       void compileProject();
     }
   }, [compileProject, openFiles, params.projectId, openFile, project?.autoCompile, setActiveFile]);
+
+  useEffect(() => {
+    if (!project?.id || !project.rootFile || automaticallyOpenedProjectRef.current === project.id) return;
+
+    automaticallyOpenedProjectRef.current = project.id;
+    void handleSelectFile(project.rootFile).catch((error) => {
+      console.error("Failed to open the main document", error);
+    });
+  }, [handleSelectFile, project?.id, project?.rootFile]);
 
   // Listen for Quick Open select
   useEffect(() => {
@@ -198,6 +248,155 @@ export default function Workspace() {
     }
   }, [params.projectId, project, setProject]);
 
+  const createFile = useCallback(async () => {
+    const path = newFilePath.trim();
+    if (!path) {
+      setNewFileError("Give the file a name first.");
+      return;
+    }
+
+    try {
+      setNewFileError("");
+      const response = await fetch(`/api/projects/${params.projectId}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to create the file.");
+
+      await refreshTree();
+      setShowNewFile(false);
+      setNewFilePath("");
+      await handleSelectFile(path);
+    } catch (error) {
+      setNewFileError(error instanceof Error ? error.message : "Unable to create the file.");
+    }
+  }, [handleSelectFile, newFilePath, params.projectId, refreshTree]);
+
+  const requestDeleteNode = useCallback((node: ProjectNode) => {
+    if (node.path === project?.rootFile) {
+      setDiagnostics([{ severity: "error", message: "Choose another main document before deleting this file." }]);
+      return;
+    }
+
+    setNodePendingDeletion(node);
+  }, [project?.rootFile, setDiagnostics]);
+
+  const deleteNode = useCallback(async () => {
+    const node = nodePendingDeletion;
+    if (!node) return;
+
+    try {
+      const desktop = desktopBridge();
+      if (desktop?.trashProjectItem) {
+        await desktop.trashProjectItem({ projectId: params.projectId, path: node.path });
+      } else {
+        const response = await fetch(`/api/projects/${params.projectId}/files?path=${encodeURIComponent(node.path)}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to delete the file.");
+      }
+
+      forgetPath(node.path);
+      await refreshTree();
+      setDiagnostics([{ severity: "info", message: `Moved “${node.name}” to the Trash.` }]);
+      setNodePendingDeletion(null);
+    } catch (error) {
+      setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "Unable to delete the file." }]);
+    }
+  }, [forgetPath, nodePendingDeletion, params.projectId, refreshTree, setDiagnostics]);
+
+  const requestDashboardNavigation = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!hasDirtyFiles) return;
+    event.preventDefault();
+    setUnsavedAction({ type: "dashboard" });
+  };
+
+  const requestCloseFile = (path: string) => {
+    if (isDirty[path]) {
+      setUnsavedAction({ type: "close-file", path });
+      return;
+    }
+    closeFile(path);
+  };
+
+  const discardUnsavedAction = () => {
+    if (unsavedAction?.type === "dashboard") router.push("/app");
+    if (unsavedAction?.type === "close-file") closeFile(unsavedAction.path);
+    setUnsavedAction(null);
+  };
+
+  const setMainDocument = useCallback((path: string) => {
+    void updateProjectSettings({ rootFile: path });
+  }, [updateProjectSettings]);
+
+  const downloadPdf = useCallback(async () => {
+    const filename = (project?.rootFile || "document.tex").replace(/\.tex$/i, ".pdf");
+    const desktop = desktopBridge();
+
+    if (desktop?.savePdf) {
+      try {
+        const result = await desktop.savePdf({ projectId: params.projectId, filename });
+        if (!result.cancelled) {
+          setDiagnostics([{ severity: "info", message: "PDF saved to your chosen location." }]);
+        }
+      } catch (error) {
+        setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "The PDF could not be saved." }]);
+      }
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = `/api/projects/${params.projectId}/pdf`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, [params.projectId, project?.rootFile, setDiagnostics]);
+
+  useEffect(() => {
+    const desktop = desktopBridge();
+    if (!desktop?.onMenuCommand) return;
+
+    return desktop.onMenuCommand((command) => {
+      switch (command.type) {
+        case "new-file":
+          setNewFileError("");
+          setShowNewFile(true);
+          break;
+        case "save-all":
+          void saveDirtyFiles(Object.keys(isDirty));
+          break;
+        case "recompile":
+          void compileProject();
+          break;
+        case "export-pdf":
+          void downloadPdf();
+          break;
+        case "toggle-explorer":
+          toggleExplorer();
+          break;
+        case "set-auto-save":
+          void updateProjectSettings(command.enabled
+            ? { autoSave: true }
+            : { autoSave: false, autoCompile: false });
+          break;
+        case "set-auto-compile":
+          void updateProjectSettings(command.enabled
+            ? { autoSave: true, autoCompile: true }
+            : { autoCompile: false });
+          break;
+      }
+    });
+  }, [compileProject, downloadPdf, isDirty, saveDirtyFiles, toggleExplorer, updateProjectSettings]);
+
+  useEffect(() => {
+    const autoSave = project?.autoSave;
+    const autoCompile = project?.autoCompile;
+    if (typeof autoSave !== "boolean" || typeof autoCompile !== "boolean") return;
+    desktopBridge()?.setMenuState?.({ autoSave, autoCompile });
+  }, [project?.autoCompile, project?.autoSave]);
+
   // Keyboard shortcut: Cmd/Ctrl + S, Cmd/Ctrl + P
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -218,9 +417,10 @@ export default function Workspace() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeFile, compileProject, saveFile]);
 
-  // Autosave & Auto-compile
+  // Auto-save is deliberately independent from compiling so writers can keep
+  // their files safe without triggering a PDF build after every pause.
   useEffect(() => {
-    if (!project?.autoCompile) return;
+    if (!project?.autoSave) return;
     
     const dirtyPaths = Object.keys(isDirty).filter(p => isDirty[p]);
     
@@ -230,13 +430,13 @@ export default function Workspace() {
       saveTimeoutRef.current = setTimeout(async () => {
         saveTimeoutRef.current = null;
         const saved = await saveDirtyFiles(dirtyPaths);
-        if (saved) void compileProject({ flushDirty: false });
+        if (saved && project.autoCompile) void compileProject({ flushDirty: false });
       }, project.autoCompileDelayMs ?? 800);
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [compileProject, fileContents, isDirty, project?.autoCompile, project?.autoCompileDelayMs, saveDirtyFiles]);
+  }, [compileProject, fileContents, isDirty, project?.autoCompile, project?.autoCompileDelayMs, project?.autoSave, saveDirtyFiles]);
 
   useEffect(() => {
     const enabled = Boolean(project?.autoCompile);
@@ -249,13 +449,20 @@ export default function Workspace() {
   }, [activeFile, compileProject, project?.autoCompile]);
   
   return (
-    <div className="h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden">
+    <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden">
       <QuickOpen isOpen={isQuickOpen} onClose={() => setIsQuickOpen(false)} />
       {/* Top Application Bar */}
-      <header className="h-14 border-b border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_92%,transparent)] backdrop-blur-xl flex items-center justify-between px-4 sm:px-5 shrink-0 transition-colors duration-200 ease-out shadow-[0_1px_0_rgba(20,20,20,.02)]">
+      <header className="quire-workspace-header h-14 border-b border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_92%,transparent)] backdrop-blur-xl flex items-center justify-between px-4 sm:px-5 shrink-0 transition-colors duration-200 ease-out shadow-[0_1px_0_rgba(20,20,20,.02)]">
         <div className="flex items-center gap-3.5 min-w-0">
-          <Link href="/app" className="w-7 h-7 rounded-[9px] bg-[var(--quire-red-soft)] flex items-center justify-center hover:scale-[1.03] transition-transform shrink-0">
+          <Link
+            href="/app"
+            onClick={requestDashboardNavigation}
+            aria-label="Go back to menu"
+            title="Go back to menu"
+            className="group/menu inline-flex h-8 shrink-0 items-center gap-2 rounded-[10px] bg-[var(--quire-red-soft)] px-1.5 text-[var(--quire-text)] transition-all hover:scale-[1.03] hover:pr-2.5"
+          >
             <QuireMark className="w-5 h-5" />
+            <span className="hidden text-[11px] font-semibold sm:inline">Back to menu</span>
           </Link>
           <div className="h-5 w-px bg-[var(--quire-border)]"></div>
           <span className="font-semibold text-[13px] tracking-[-0.02em] truncate">{project?.name || "Loading..."}</span>
@@ -275,7 +482,8 @@ export default function Workspace() {
                 type="checkbox" 
                 className="sr-only peer"
                 checked={project?.autoCompile || false} 
-                onChange={(e) => void updateProjectSettings({ autoCompile: e.target.checked })}
+                disabled={!project?.autoSave}
+                onChange={(e) => void updateProjectSettings({ autoCompile: e.target.checked, autoSave: e.target.checked || project?.autoSave })}
               />
               <div className="w-8 h-[18px] bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[14px] after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
             </div>
@@ -311,6 +519,8 @@ export default function Workspace() {
               const next = current === 'dark' ? 'light' : 'dark';
               root.setAttribute('data-theme', next);
               localStorage.setItem('quire:theme', next);
+              const desktop = desktopBridge();
+              void desktop?.setWindowAppearance?.(next);
             }}
           >
             <Sun className="w-4 h-4 hidden dark:block" />
@@ -335,6 +545,58 @@ export default function Workspace() {
         />
       )}
 
+      <Dialog.Root open={showNewFile} onOpenChange={(open) => {
+        setShowNewFile(open);
+        if (!open) {
+          setNewFilePath("");
+          setNewFileError("");
+        }
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(calc(100vw-2rem),27rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-5 shadow-[0_20px_60px_-15px_rgba(0,0,0,.25)] focus:outline-none">
+            <Dialog.Title className="text-lg font-semibold tracking-[-0.02em]">New file</Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--quire-muted)]">Create a file inside this project. You can use folders, for example <code className="rounded bg-[var(--quire-hover)] px-1 py-0.5">chapters/intro.tex</code>.</Dialog.Description>
+            <form className="mt-5" onSubmit={(event) => { event.preventDefault(); void createFile(); }}>
+              <label className="block text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="new-file-path">File name</label>
+              <input
+                id="new-file-path"
+                autoFocus
+                value={newFilePath}
+                onChange={(event) => setNewFilePath(event.target.value)}
+                placeholder="notes.tex"
+                className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--quire-red)]"
+              />
+              {newFileError && <p className="mt-2 text-xs text-[var(--quire-red)]">{newFileError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <Dialog.Close className="rounded-lg px-3 py-2 text-sm font-semibold text-[var(--quire-muted)] hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]">Cancel</Dialog.Close>
+                <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--quire-red)] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_5px_14px_rgba(255,0,0,.2)] hover:brightness-95"><FilePlus className="h-4 w-4" />Create file</button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <ConfirmationDialog
+        open={Boolean(nodePendingDeletion)}
+        onOpenChange={(open) => { if (!open) setNodePendingDeletion(null); }}
+        title={nodePendingDeletion ? `Move “${nodePendingDeletion.name}” to the Trash?` : "Move this item to the Trash?"}
+        description={nodePendingDeletion?.type === "directory" ? "This folder and everything inside it will be moved to the macOS Trash. You can restore it from there if needed." : "This file will be moved to the macOS Trash. You can restore it from there if needed."}
+        confirmLabel="Move to Trash"
+        onConfirm={() => void deleteNode()}
+      />
+
+      <ConfirmationDialog
+        open={Boolean(unsavedAction)}
+        onOpenChange={(open) => { if (!open) setUnsavedAction(null); }}
+        title="Discard unsaved changes?"
+        description={unsavedAction?.type === "dashboard" ? "You have changes that have not been saved. Going back to the menu will discard them." : "You have changes that have not been saved. Closing this file will discard them."}
+        confirmLabel={unsavedAction?.type === "dashboard" ? "Go to menu" : "Close without saving"}
+        cancelLabel="Keep editing"
+        tone="default"
+        onConfirm={discardUnsavedAction}
+      />
+
       {/* Main Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
         <PanelGroup orientation="horizontal">
@@ -357,15 +619,22 @@ export default function Workspace() {
             <div className="h-full flex flex-col border-r border-[var(--quire-border)] min-w-[200px]">
               <div className="px-3.5 border-b border-[var(--quire-border)] text-[10px] font-semibold tracking-[.1em] uppercase text-[var(--quire-muted)] flex justify-between items-center h-10 group/explorerHeader">
                 <span>Files</span>
-                <button aria-label="Collapse file explorer" onClick={toggleExplorer} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out opacity-0 group-hover/explorerHeader:opacity-100">
-                  <PanelLeftClose className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/explorerHeader:opacity-100 focus-within:opacity-100">
+                  <button aria-label="Create a new file" onClick={() => { setNewFileError(""); setShowNewFile(true); }} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
+                    <FilePlus className="w-3.5 h-3.5" />
+                  </button>
+                  <button aria-label="Collapse file explorer" onClick={toggleExplorer} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
+                    <PanelLeftClose className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="p-2.5 overflow-auto">
                 <ProjectTree 
                   nodes={tree} 
                   selectedPath={activeFile || ""} 
                   onSelect={handleSelectFile} 
+                  onDelete={requestDeleteNode}
+                  onSetMainDocument={setMainDocument}
                 />
               </div>
             </div>
@@ -405,7 +674,7 @@ export default function Workspace() {
                       <X 
                         className={`w-3.5 h-3.5 rounded-sm shrink-0 transition-colors duration-150 ease-out p-0.5 box-content
                           ${activeFile === file ? 'text-[var(--quire-muted)] hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)]' : 'text-transparent group-hover:text-[var(--quire-muted)] hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)]'}`}
-                        onClick={(e) => { e.stopPropagation(); closeFile(file); }}
+                        onClick={(e) => { e.stopPropagation(); requestCloseFile(file); }}
                       />
                       {activeFile === file && <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-[var(--quire-red)]" />}
                     </div>
@@ -443,8 +712,8 @@ export default function Workspace() {
           {/* PDF Preview */}
           <Panel defaultSize={40} minSize={20}>
             <PDFViewer 
-              url={pdfRevision > 0 ? `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}` : null} 
-              onDownload={() => window.open(`/api/projects/${params.projectId}/pdf`, '_blank')}
+              url={`/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
+              onDownload={() => void downloadPdf()}
             />
           </Panel>
         </PanelGroup>

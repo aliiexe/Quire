@@ -64,6 +64,11 @@ export class LocalProjectStorage implements ProjectStorage {
     return projects.sort((a, b) => b.lastModified - a.lastModified);
   }
 
+  async removeProject(projectId: string): Promise<void> {
+    const projectPath = this.getProjectPath(projectId);
+    await fs.rm(projectPath, { recursive: true, force: false });
+  }
+
   async createProject(input: CreateProjectInput): Promise<Project> {
     await this.ensureWorkspace();
     
@@ -88,10 +93,11 @@ export class LocalProjectStorage implements ProjectStorage {
       id: projectId,
       name: input.name,
       rootFile: "main.tex",
-      compiler: "pdflatex",
-      autoCompile: true,
+      compiler: input.compiler ?? "pdflatex",
+      autoSave: true,
+      autoCompile: input.autoCompile ?? true,
       autoCompileDelayMs: 800,
-      synctex: true
+      synctex: input.synctex ?? true
     };
     
     // Write config
@@ -100,15 +106,27 @@ export class LocalProjectStorage implements ProjectStorage {
       JSON.stringify(project, null, 2)
     );
     
-    // Write template
-    if (input.template !== "blank") {
-      const mainTex = `\\documentclass{article}
+    // Every new project starts with a usable source file, including a blank document.
+    const documentClass = input.template === "report" ? "report" : input.template === "thesis" ? "book" : "article";
+    const title = input.template === "thesis" ? "Untitled Thesis" : input.template === "report" ? "Untitled Report" : "Untitled Document";
+    const body = input.template === "blank"
+      ? ""
+      : input.template === "thesis"
+        ? `\\chapter{Introduction}
+
+Start writing here.
+`
+        : `\\section{Introduction}
+
+Start writing here.
+`;
+    const mainTex = `\\documentclass{${documentClass}}
 
 \\usepackage[utf8]{inputenc}
 \\usepackage{graphicx}
 \\usepackage{amsmath}
 
-\\title{Untitled Document}
+\\title{${title}}
 \\author{}
 \\date{}
 
@@ -116,14 +134,11 @@ export class LocalProjectStorage implements ProjectStorage {
 
 \\maketitle
 
-\\section{Introduction}
-
-Start writing here.
+${body}
 
 \\end{document}
 `;
-      await fs.writeFile(path.join(projectPath, "main.tex"), mainTex);
-    }
+    await fs.writeFile(path.join(projectPath, "main.tex"), mainTex);
     
     return project;
   }
@@ -134,6 +149,9 @@ Start writing here.
     const project = JSON.parse(content) as Project;
     // ensure id is set correctly
     project.id = projectId;
+    // Projects created before auto-save became a separate preference retain
+    // their original behavior: save automatically unless the writer opts out.
+    if (typeof project.autoSave !== "boolean") project.autoSave = true;
     return project;
   }
 

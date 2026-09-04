@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, type RefObject } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { ZoomIn, ZoomOut, Download, Maximize } from "lucide-react";
 
@@ -24,29 +24,41 @@ interface PdfRenderTask {
 export function PDFViewer({ url, onDownload }: PDFViewerProps) {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(1.0); // 1.0 means Fit Width baseline
+  // A value of one is deliberately the fit-to-width baseline. We label that
+  // state as “Fit” in the UI, rather than misleadingly calling it 100%.
+  const [scale, setScale] = useState(1.0);
   const [baseDimensions, setBaseDimensions] = useState<PageDimensions | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const pagesContainerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const observerRef = useRef<IntersectionObserver | null>(null);
 
   // Load PDF
   useEffect(() => {
-    if (!url) return;
-    let isMounted = true;
+    if (!url) {
+      setPdf(null);
+      setNumPages(0);
+      setBaseDimensions(null);
+      setLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | null = null;
     setLoading(true);
+    setLoadError(null);
+    setPdf(null);
+    setNumPages(0);
+    setBaseDimensions(null);
 
     const loadPDF = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({ url });
+        loadingTask = pdfjsLib.getDocument({ url });
         const pdfDoc = await loadingTask.promise;
-        
-        if (!isMounted) return;
+        if (cancelled) return;
         
         setPdf(pdfDoc);
         setNumPages(pdfDoc.numPages);
@@ -58,61 +70,38 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
         setBaseDimensions({ width: viewport.width, height: viewport.height });
 
       } catch (error) {
+        if (cancelled) return;
         console.error("Error loading PDF:", error);
+        setLoadError("No PDF is available yet. Compile this project to create a preview.");
       } finally {
-        if (isMounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     
-    loadPDF();
-    return () => { isMounted = false; };
+    void loadPDF();
+    return () => {
+      cancelled = true;
+      loadingTask?.destroy();
+    };
   }, [url]);
 
   // ResizeObserver for Container Width
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
+    // The resizable-panel library changes the width of its direct child.
+    // Measure both the scrolling element and its panel-sized parent: relying
+    // on the child alone can capture its initial shrink-to-content width.
+    const measure = () => {
+      const ownWidth = el.getBoundingClientRect().width;
+      const parentWidth = el.parentElement?.getBoundingClientRect().width ?? 0;
+      setContainerWidth(Math.round(Math.max(ownWidth, parentWidth)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, [url]); // Re-run this effect when URL changes (so the container is mounted)
-
-  // IntersectionObserver for tracking current scroll page
-  useEffect(() => {
-    if (!pagesContainerRef.current) return;
-
-    const options = {
-      root: containerRef.current,
-      rootMargin: "-40% 0px -40% 0px",
-      threshold: 0
-    };
-
-    observerRef.current = new IntersectionObserver((entries) => {
-      // Find the page most visible
-      let mostVisibleId = -1;
-      let maxRatio = -1;
-      
-      // Sometimes multiple pages intersect, we just grab the one currently intersecting in the middle
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const pageNum = parseInt(entry.target.getAttribute('data-page') || "1", 10);
-          mostVisibleId = pageNum;
-        }
-      });
-
-      if (mostVisibleId !== -1) {
-        setCurrentPage(mostVisibleId);
-      }
-    }, options);
-
-    return () => {
-      if (observerRef.current) observerRef.current.disconnect();
-    };
-  }, [containerWidth]);
 
   // Navigation
   const scrollToPage = useCallback((pageNum: number) => {
@@ -126,23 +115,28 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
     }
   }, []);
 
+  const markPageVisible = useCallback((pageNum: number) => {
+    setCurrentPage((current) => current === pageNum ? current : pageNum);
+  }, []);
+
   // Compute actual display width/height per page based on fit-width
   // We leave 48px total horizontal padding (24px each side)
   const availableWidth = Math.max(containerWidth - 48, 100);
   const fitScale = baseDimensions ? availableWidth / baseDimensions.width : 1;
   const currentScale = fitScale * scale;
+  const isFitWidth = scale === 1;
 
-  if (!url) {
+  if (!url || loadError) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-[var(--quire-muted)]">
         <span className="text-sm">No PDF yet</span>
-        <span className="text-xs mt-1">Compile this project to generate a preview.</span>
+        <span className="mt-1 max-w-xs text-center text-xs leading-5">{loadError || "Compile this project to generate a preview."}</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--quire-bg)]">
+    <div className="flex h-full w-full min-w-0 flex-col bg-[var(--quire-bg)]">
       {/* PDF Toolbar */}
       <div className="h-12 border-b border-[var(--quire-border)] bg-[var(--quire-surface)] flex items-center justify-between px-4 shrink-0 shadow-sm z-10 relative">
         <div className="flex items-center gap-1.5 text-[12px] bg-[var(--quire-surface-secondary)] p-1 rounded-md border border-[var(--quire-border)] shadow-sm">
@@ -166,16 +160,17 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
         </div>
         
         <div className="flex items-center gap-1 text-[var(--quire-muted)] bg-[var(--quire-surface-secondary)] p-1 rounded-md border border-[var(--quire-border)] shadow-sm">
-          <button onClick={() => setScale(s => Math.max(0.5, s - 0.25))} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out">
+          <button onClick={() => setScale(s => Math.max(0.5, s - 0.25))} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Zoom out" aria-label="Zoom out">
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="text-[12px] w-10 text-center tabular-nums font-medium">{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(s => Math.min(2.5, s + 0.25))} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out">
+          <span className="text-[12px] w-12 text-center tabular-nums font-medium" title={isFitWidth ? "Fit to preview width" : "Document zoom"}>{isFitWidth ? "Fit" : `${Math.round(currentScale * 100)}%`}</span>
+          <button onClick={() => setScale(s => Math.min(2.5, s + 0.25))} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Zoom in" aria-label="Zoom in">
             <ZoomIn className="w-4 h-4" />
           </button>
           <div className="w-px h-3 bg-[var(--quire-border)] mx-1" />
-          <button onClick={() => setScale(1.0)} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Fit Width">
+          <button onClick={() => setScale(1.0)} className="inline-flex items-center gap-1 rounded-sm px-1.5 py-1 hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Fit preview to width" aria-label="Fit preview to width">
             <Maximize className="w-4 h-4" />
+            <span className="hidden lg:inline text-[11px] font-medium">Fit width</span>
           </button>
           <div className="w-px h-3 bg-[var(--quire-border)] mx-1" />
           <button onClick={onDownload} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Download PDF">
@@ -187,15 +182,12 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
       {/* Scrollable Document Container */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden bg-[var(--quire-pdf-bg)] relative transition-colors duration-150 ease-out"
+        className="flex-1 w-full min-w-0 overflow-auto bg-[var(--quire-pdf-bg)] relative transition-colors duration-150 ease-out"
       >
         {loading ? (
           <div className="flex justify-center mt-12 text-sm text-[var(--quire-muted)]">Loading PDF...</div>
         ) : (
-          <div 
-            ref={pagesContainerRef}
-            className="flex flex-col items-center py-6 gap-6"
-          >
+          <div className="flex flex-col items-center py-6 gap-6">
             {pdf && baseDimensions && Array.from({ length: numPages }, (_, i) => i + 1).map(pageNum => (
               <PDFPageNode
                 key={`${url}-${pageNum}`} // Re-mount if URL (build rev) changes
@@ -203,7 +195,8 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
                 pdfDoc={pdf}
                 scale={currentScale}
                 baseDimensions={baseDimensions}
-                observer={observerRef.current}
+                scrollContainerRef={containerRef}
+                onPageVisible={markPageVisible}
                 onRef={(el) => {
                   if (el) {
                     pageRefs.current.set(pageNum, el);
@@ -229,42 +222,51 @@ interface PDFPageNodeProps {
   pdfDoc: pdfjsLib.PDFDocumentProxy;
   scale: number;
   baseDimensions: PageDimensions;
-  observer: IntersectionObserver | null;
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  onPageVisible: (pageNumber: number) => void;
   onRef: (el: HTMLDivElement | null) => void;
 }
 
-function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRef }: PDFPageNodeProps) {
+function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, scrollContainerRef, onPageVisible, onRef }: PDFPageNodeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(pageNumber === 1);
   const [dimensions, setDimensions] = useState<PageDimensions>(baseDimensions);
   const [renderedScale, setRenderedScale] = useState(0);
   const [renderedDoc, setRenderedDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const renderTaskRef = useRef<PdfRenderTask | null>(null);
 
-  // Observe visibility
+  // Each page owns its observers so its initial render never depends on a
+  // parent ref update or an unrelated UI interaction.
   useEffect(() => {
-    if (!containerRef.current || !observer) return;
-    
-    // We create a local observer just to trigger lazy loading because 
-    // the main observer is only for tracking the current page (threshold: 0, margin: "-40%")
+    const pageElement = containerRef.current;
+    const scrollRoot = scrollContainerRef.current;
+    if (!pageElement || !scrollRoot) {
+      setIsVisible(true);
+      return;
+    }
+
     const lazyObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           setIsVisible(true);
         }
       });
-    }, { rootMargin: "100% 0px 100% 0px" }); // Load when within 1 viewport distance
+    }, { root: scrollRoot, rootMargin: "100% 0px 100% 0px" });
+
+    const pageObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) onPageVisible(pageNumber);
+    }, { root: scrollRoot, rootMargin: "-40% 0px -40% 0px", threshold: 0 });
     
-    lazyObserver.observe(containerRef.current);
-    observer.observe(containerRef.current);
+    lazyObserver.observe(pageElement);
+    pageObserver.observe(pageElement);
     
     return () => {
       lazyObserver.disconnect();
-      if (containerRef.current && observer) observer.unobserve(containerRef.current);
+      pageObserver.disconnect();
     };
-  }, [observer]);
+  }, [onPageVisible, pageNumber, scrollContainerRef]);
 
   // Render Page. PDF.js only allows one render task per canvas, so always
   // cancel and settle an earlier task before reusing this page's canvas.

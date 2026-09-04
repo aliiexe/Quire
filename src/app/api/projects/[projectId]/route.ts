@@ -6,6 +6,7 @@ const projectUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   rootFile: z.string().min(1).optional(),
   compiler: z.enum(["pdflatex", "xelatex", "lualatex"]).optional(),
+  autoSave: z.boolean().optional(),
   autoCompile: z.boolean().optional(),
   autoCompileDelayMs: z.number().int().min(0).max(10000).optional(),
   synctex: z.boolean().optional(),
@@ -40,6 +41,19 @@ export async function PATCH(
     return NextResponse.json(project);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to update project settings";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    await storage.removeProject((await params).projectId);
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unable to delete project";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -4,7 +4,10 @@ import { z } from "zod";
 
 const createProjectSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  template: z.enum(["blank", "article", "report"]).optional().default("article"),
+  template: z.enum(["blank", "article", "report", "thesis"]).optional().default("article"),
+  compiler: z.enum(["pdflatex", "xelatex", "lualatex"]).optional(),
+  autoCompile: z.boolean().optional(),
+  synctex: z.boolean().optional(),
 });
 
 export async function GET() {

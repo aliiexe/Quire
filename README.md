@@ -1,73 +1,202 @@
-<div align="center">
-  <img src="public/brand/quire-wordmark-light.png" alt="Quire Logo" width="200" />
-</div>
+<p align="center">
+  <img src="public/brand/quire-wordmark-dark.png" alt="Quire" width="240" />
+</p>
 
-<br />
+<p align="center">
+  <strong>A calm, local-first workspace for writing and compiling LaTeX.</strong>
+</p>
 
-> Quire is a modern, local-first workspace for writing and compiling LaTeX documents.
+<p align="center">
+  Write in a focused editor, compile with the TeX installation already on your machine, and read the resulting PDF without sending your work anywhere.
+</p>
 
-Quire is designed for users who want the power and simplicity of a web-based LaTeX editor (like Overleaf) but prefer to run everything locally without arbitrary compile quotas or cloud dependencies.
+<p align="center">
+  <a href="#why-quire">Why Quire</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+## Why Quire
+
+Writing tools should feel dependable, private, and pleasantly quiet. Quire is an open-source, local-first workspace for LaTeX projects that runs on your own computer.
+
+Your project files remain ordinary files in a local workspace. Compiles use your installed TeX distribution. The PDF preview is generated and displayed locally. There is no account to create, no remote compile queue, and no cloud quota between you and your document.
+
+| Quire gives you | What that means |
+| --- | --- |
+| Local projects | Your source files stay in a folder you control. |
+| Local compilation | `latexmk` runs with your local TeX Live or MacTeX installation. |
+| A focused workspace | Editor, project tree, build controls, diagnostics, and PDF preview belong in one place. |
+| Plain-file portability | Open an existing project, work normally, and take it with you whenever you like. |
+| Open source | Inspect the implementation, adapt it to your workflow, and help make it better. |
 
 ## Features
 
-- **Local-First Architecture:** Projects are stored directly on your hard drive inside your `workspace`. No database or authentication required.
-- **Modern Interface:** A calm, clean, editorial interface that stays out of your way.
-- **LaTeX Compiler Integration:** Compiles automatically as you save using `pdflatex`, `xelatex`, or `lualatex`.
-- **Intelligent Diagnostics:** Parsed `file-line-error` diagnostics shown instantly in the UI.
-- **Built-in PDF Preview:** Split pane with a lightning-fast PDF.js preview that syncs to your latest successful build.
+- **A considered writing surface** — CodeMirror-powered source editing, sensible shortcuts, tabs, quick open, and a project tree that stays out of the way.
+- **Real local builds** — Compile with `pdflatex`, `xelatex`, or `lualatex` through `latexmk`.
+- **Auto compile that behaves naturally** — When enabled, edits and newly selected text source files compile after the configured pause; the latest successful PDF refreshes in place.
+- **Useful diagnostics** — File and line-aware compiler errors are surfaced beside the document rather than buried in a terminal.
+- **A dedicated PDF reader** — Continuous pages, zoom, fit width, page controls, download, and safe handling of rapid rebuilds.
+- **Project-friendly imports** — Start from a blank template or bring in an existing ZIP archive without changing its structure.
+- **Light and dark appearances** — A warm, restrained interface with a persistent appearance preference.
+- **A responsive product site** — Learn about Quire on any screen size, then open the local workspace when you are ready to write.
 
-## Requirements
+## Quick start
 
-1. **Node.js 18+**
-2. **TeX Live or MacTeX** installed on your system.
-3. The `latexmk` command line utility (included in most LaTeX distributions).
+### Prerequisites
 
-## Installation & Setup
+Install the following before running Quire:
 
-1. **Clone the repository** and install dependencies:
-   \`\`\`bash
-   git clone https://github.com/your-username/quire.git
-   cd quire
-   npm install
-   \`\`\`
+1. **Node.js 20 or newer**
+2. **A TeX distribution** with `latexmk` and at least one engine:
+   - macOS: MacTeX or BasicTeX
+   - Linux: TeX Live
+   - Windows: MiKTeX or TeX Live
 
-2. **Verify your LaTeX environment:**
-   Quire includes a diagnostic script to check your local compiler availability.
-   \`\`\`bash
-   npm run doctor
-   \`\`\`
+> Quire needs `latexmk` for compilation. The app can use pdfLaTeX, XeLaTeX, or LuaLaTeX depending on the project setting.
 
-3. **Start the development server:**
-   \`\`\`bash
-   npm run dev
-   \`\`\`
-   Navigate to [http://localhost:3000](http://localhost:3000)
+### Install and run
 
-## Keyboard Shortcuts
+```bash
+git clone https://github.com/aliiexe/Quire.git
+cd Quire
+npm ci
+npm run doctor
+npm run dev
+```
 
-| Command          | Shortcut          |
-|------------------|-------------------|
-| Quick Open File  | \`Cmd/Ctrl + P\`  |
-| Save             | \`Cmd/Ctrl + S\`  |
-| Force Compile    | \`Cmd/Ctrl + Enter\` |
+Open [http://localhost:3000](http://localhost:3000), then choose **Open Quire** to create or import a project.
 
-## Environment Variables
+If the doctor reports that TeX is missing, install or repair your TeX distribution and run it again:
 
-Check `.env.example` to customize the workspace.
+```bash
+npm run doctor
+```
 
-\`\`\`env
-QUIRE_WORKSPACE=/Users/yourname/Documents/QuireWorkspace
+### Production build
+
+```bash
+npm run build
+npm start
+```
+
+## Everyday workflow
+
+1. Create a blank article or report, or import an existing ZIP project.
+2. Choose the root `.tex` file and compiler in project settings.
+3. Write in the editor and save normally.
+4. Leave **Auto compile** on for a fresh preview after each pause, or use **Recompile** when you want an explicit build.
+5. Read, zoom, or download the latest PDF directly beside the source.
+
+### Keyboard shortcuts
+
+| Action | Shortcut |
+| --- | --- |
+| Quick open | `Cmd/Ctrl + P` |
+| Save current file | `Cmd/Ctrl + S` |
+| Force a compile | `Cmd/Ctrl + Enter` |
+
+## Configuration
+
+Quire works without configuration. By default, projects live in the repository's `workspace/` directory and builds are written into each project's `.quire/build/` directory.
+
+Use a local environment file when you want to move the workspace or change the build timeout:
+
+```bash
+# .env.local
+QUIRE_WORKSPACE=/absolute/path/to/your/quire-workspace
 QUIRE_COMPILE_TIMEOUT_MS=60000
-QUIRE_MAX_UPLOAD_MB=25
-\`\`\`
+```
 
-## Architecture
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `QUIRE_WORKSPACE` | `<repository>/workspace` | The folder containing all local Quire projects. |
+| `QUIRE_COMPILE_TIMEOUT_MS` | `60000` | Maximum duration of one LaTeX build, in milliseconds. |
 
-Quire uses a three-tier design for future expandability:
-1. **Next.js UI:** React/Tailwind frontend, heavily reliant on Zustand for application state and CodeMirror 6 for editing.
-2. **Project Storage Abstraction:** Local files are mapped through a `LocalProjectStorage` abstraction using Node's `fs`, protecting against path-traversals.
-3. **Compiler Daemon:** A spawned Node.js process manager interfacing safely with `latexmk` avoiding direct shell command construction.
+Each project stores its own settings, including root file, selected engine, auto-compile preference, delay, and SyncTeX setting, in `.quire/project.json`.
 
-## Security
+## How it works
 
-Please see [SECURITY.md](SECURITY.md) for detailed notes on local and remote execution safety, path-traversal prevention, and our threat model.
+```text
+Your project files
+       ↓
+Quire editor and project tree
+       ↓
+latexmk + your local TeX distribution
+       ↓
+.quire/build/<document>.pdf
+       ↓
+Built-in PDF preview
+```
+
+Quire is built with Next.js and React, with CodeMirror for source editing and PDF.js for previewing. A small project-storage layer keeps filesystem operations scoped to the configured workspace. The compiler starts `latexmk` as a local process with explicit arguments rather than through a shell command.
+
+The project is intentionally designed around normal LaTeX folders. Quire does not require a proprietary file format, a database, or an online account to edit and compile a document.
+
+## Privacy and local-first design
+
+Quire's core workflow runs on your machine:
+
+- Project source, assets, and generated PDFs stay in your configured workspace.
+- The local web server is for your own browser session; it is not a hosted editor.
+- The TeX compiler is the one installed on your computer.
+- There is no built-in authentication, telemetry pipeline, or cloud-sync requirement.
+
+As with any local development server, only run Quire on networks and machines you trust. See [SECURITY.md](SECURITY.md) for the current threat model and compiler safeguards.
+
+## Project structure
+
+```text
+src/
+  app/                 Next.js pages and local API routes
+  components/          Workspace and marketing UI
+  lib/compiler/        latexmk integration and diagnostics parsing
+  lib/projects/        Local storage and safe path handling
+  stores/              Client-side workspace state
+public/                Brand assets, fonts, and marketing imagery
+workspace/             Default location for local projects
+scripts/doctor.ts      Local environment diagnostic
+```
+
+## Development
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the development server with Webpack. |
+| `npm run build` | Produce an optimized production build. |
+| `npm start` | Run the production build. |
+| `npm run doctor` | Check Node, `latexmk`, and installed TeX engines. |
+| `npx tsc --noEmit` | Type-check the application. |
+
+Before opening a pull request, please run:
+
+```bash
+npx tsc --noEmit
+npm run build
+```
+
+## Contributing
+
+Contributions are welcome, whether they improve a small interaction or help shape the product's future.
+
+1. Fork the repository and create a focused branch.
+2. Keep changes local-first: avoid introducing a cloud dependency unless it is clearly optional and documented.
+3. Preserve the plain-file project model and respect the current security boundaries around filesystem access and compilation.
+4. Test the affected flow with a real LaTeX project where possible.
+5. Open a pull request that explains the problem, the approach, and how you verified it.
+
+For security-sensitive issues, please do not open a public issue. Follow the reporting guidance in [SECURITY.md](SECURITY.md).
+
+## Roadmap
+
+Quire is focused first on making the local writing experience exceptional. Areas that may benefit from community discussion include templates, more editor ergonomics, better project discovery, and optional collaboration workflows that never compromise the local core.
+
+## Acknowledgements
+
+Quire is built with [Next.js](https://nextjs.org/), [React](https://react.dev/), [CodeMirror](https://codemirror.net/), [PDF.js](https://mozilla.github.io/pdf.js/), and the TeX ecosystem.
+
+---
+
+Made for people who want their writing tools to feel like their own.

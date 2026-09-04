@@ -109,9 +109,13 @@ The command creates two DMG installers in `release/`:
 
 Upload both files to a GitHub Release so the **Download for macOS** actions on the landing page lead users to the available installers.
 
-### Before publishing publicly
+### Publish a free macOS preview
 
-Local DMG builds are suitable for testing, but public macOS releases should be signed with a valid Apple Developer ID and notarized by Apple. Without that, Gatekeeper will show an unidentified-developer warning to people who download Quire.
+Quire can be released as a free, unsigned preview before Apple Developer ID signing is available. Create a GitHub Release, attach the DMG files, and use the prepared [release description](docs/GITHUB_RELEASE_TEMPLATE.md). It explains that users may need to choose **System Settings → Privacy & Security → Open Anyway** after their first launch attempt.
+
+### For a future Apple-verified release
+
+Local DMG builds are suitable for testing, but signed and notarized releases give users a smoother first launch. Until Quire has a valid Apple Developer ID, Gatekeeper will show an unidentified-developer warning to people who download the preview.
 
 Set up a Developer ID Application certificate and Apple notarization credentials in your release environment before publishing a public release. Electron Builder detects valid signing credentials and applies them during the packaging step.
 

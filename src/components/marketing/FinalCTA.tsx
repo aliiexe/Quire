@@ -12,6 +12,9 @@ export function FinalCTA() {
           <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--light">Download for macOS <Download size={16} /></a>
           <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-button mk-button--ghost">GitHub ↗</a>
         </div>
+        <p className="mt-5 max-w-xl text-sm leading-6 text-white/70">
+          Free, open-source macOS preview. This independent release is not yet Apple-notarized. If macOS blocks the first launch after you move Quire to Applications, open <strong className="font-semibold text-white">System Settings → Privacy &amp; Security → Open Anyway</strong>.
+        </p>
       </div>
     </section>
   );

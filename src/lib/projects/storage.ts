@@ -35,6 +35,7 @@ export interface ProjectStorage {
   listProjects(): Promise<ProjectSummary[]>;
   createProject(input: CreateProjectInput): Promise<Project>;
   getProject(projectId: string): Promise<Project>;
+  updateProject(projectId: string, updates: Partial<Omit<Project, "id">>): Promise<Project>;
   listTree(projectId: string): Promise<ProjectNode[]>;
   readFile(projectId: string, path: string): Promise<FileContent>;
   writeFile(projectId: string, path: string, content: string): Promise<void>;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FolderOpen, Plus, FileArchive, Loader2 } from "lucide-react";
+import { ArrowUpRight, FileArchive, FileText, FolderOpen, Loader2, Moon, Plus, Sparkles, Sun } from "lucide-react";
 import { QuireWordmark } from "@/components/brand/logo";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [isImporting, setIsImporting] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const router = useRouter();
 
   useEffect(() => {
@@ -25,6 +26,12 @@ export default function Dashboard() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("quire:theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setTheme(savedTheme === "dark" || (savedTheme !== "light" && prefersDark) ? "dark" : "light");
   }, []);
 
   const handleCreate = async () => {
@@ -64,22 +71,59 @@ export default function Dashboard() {
     }
   };
 
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    localStorage.setItem("quire:theme", nextTheme);
+    setTheme(nextTheme);
+  };
+
   return (
-    <div className="min-h-screen bg-[var(--quire-bg)] flex flex-col items-center py-16 px-4">
-      <div className="w-full max-w-4xl">
-        <header className="mb-12 flex items-center justify-between">
-          <QuireWordmark className="w-32 h-auto" />
+    <div className="relative min-h-screen overflow-hidden bg-[var(--quire-bg)] px-4 py-5 text-[var(--quire-text)] sm:px-8 sm:py-7">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[32rem] bg-[radial-gradient(ellipse_at_top,rgba(255,0,0,0.07),transparent_56%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,50,42,0.12),transparent_56%)]" />
+      <div className="relative mx-auto w-full max-w-6xl">
+        <header className="flex items-center justify-between border-b border-[var(--quire-border)] pb-5 sm:pb-6">
+          <div className="flex items-center gap-3">
+            <QuireWordmark className="w-[7.5rem] h-auto" />
+            <span className="hidden rounded-full border border-[var(--quire-border)] bg-[var(--quire-surface)] px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] text-[var(--quire-muted)] sm:inline-flex">LOCAL WORKSPACE</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/" className="hidden rounded-lg px-3 py-2 text-xs font-semibold text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] sm:inline-flex">Website</Link>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--quire-border)] bg-[var(--quire-surface)] text-[var(--quire-muted)] shadow-sm transition-all hover:-translate-y-px hover:text-[var(--quire-text)]"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} appearance`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} appearance`}
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </header>
 
-        <main className="space-y-12">
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <main className="pb-10 pt-14 sm:pt-20">
+          <section className="max-w-2xl">
+            <div className="mb-4 flex items-center gap-2 text-[11px] font-bold tracking-[0.13em] text-[var(--quire-red)]">
+              <Sparkles className="h-3.5 w-3.5" />
+              YOUR DESK
+            </div>
+            <h1 className="max-w-xl text-4xl font-semibold tracking-[-0.055em] sm:text-5xl">A good place to begin.</h1>
+            <p className="mt-4 max-w-lg text-sm leading-6 text-[var(--quire-muted)] sm:text-base">Create a new LaTeX project, bring in work you already have, or pick up exactly where you left off.</p>
+          </section>
+
+          <section className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
             <button 
               onClick={() => setIsCreating(true)}
-              className="flex flex-col items-center justify-center p-8 bg-[var(--quire-surface)] border border-[var(--quire-border)] rounded-xl hover:border-[var(--quire-text)] transition-colors group cursor-pointer text-left w-full"
+              className="group relative min-h-56 overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-7 text-left shadow-[0_12px_30px_rgba(20,20,20,0.04)] transition-all hover:-translate-y-1 hover:border-[var(--quire-red)] hover:shadow-[0_20px_44px_rgba(255,0,0,0.1)]"
             >
-              <Plus className="w-8 h-8 mb-4 text-[var(--quire-muted)] group-hover:text-[var(--quire-text)] transition-colors" />
-              <h2 className="text-lg font-medium">New project</h2>
-              <p className="text-sm text-[var(--quire-muted)] mt-1 text-center">Start a blank document or use a template</p>
+              <span className="absolute -right-6 -top-9 text-[11rem] font-semibold leading-none tracking-[-0.12em] text-[var(--quire-red)] opacity-[0.055] transition-transform duration-300 group-hover:scale-110">+</span>
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--quire-red)] text-white shadow-[0_8px_18px_rgba(255,0,0,0.22)]"><Plus className="h-5 w-5" /></span>
+              <div className="relative mt-12">
+                <span className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-red)]">START FRESH</span>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">New project</h2>
+                <p className="mt-2 max-w-xs text-sm leading-5 text-[var(--quire-muted)]">Start with a clean article and make it yours.</p>
+              </div>
+              <span className="absolute bottom-7 right-7 grid h-8 w-8 place-items-center rounded-full border border-[var(--quire-border)] text-[var(--quire-muted)] transition-all group-hover:border-[var(--quire-red)] group-hover:bg-[var(--quire-red)] group-hover:text-white"><ArrowUpRight className="h-4 w-4" /></span>
             </button>
 
             <button 
@@ -88,39 +132,58 @@ export default function Dashboard() {
                 setImportFile(null);
                 setIsImporting(true);
               }}
-              className="flex flex-col items-center justify-center p-8 bg-[var(--quire-surface)] border border-[var(--quire-border)] rounded-xl hover:border-[var(--quire-text)] transition-colors group cursor-pointer text-left w-full"
+              className="group relative min-h-56 overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-7 text-left shadow-[0_12px_30px_rgba(20,20,20,0.04)] transition-all hover:-translate-y-1 hover:border-[var(--quire-text)] hover:shadow-[0_20px_44px_rgba(20,20,20,0.08)]"
             >
-              <FileArchive className="w-8 h-8 mb-4 text-[var(--quire-muted)] group-hover:text-[var(--quire-text)] transition-colors" />
-              <h2 className="text-lg font-medium">Import project</h2>
-              <p className="text-sm text-[var(--quire-muted)] mt-1 text-center">Upload a ZIP archive of an existing project</p>
+              <span className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] text-[var(--quire-text)]"><FileArchive className="h-5 w-5" /></span>
+              <div className="relative mt-12">
+                <span className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">BRING YOUR WORK</span>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Import project</h2>
+                <p className="mt-2 max-w-xs text-sm leading-5 text-[var(--quire-muted)]">Open an existing ZIP archive without changing how it is organized.</p>
+              </div>
+              <span className="absolute bottom-7 right-7 grid h-8 w-8 place-items-center rounded-full border border-[var(--quire-border)] text-[var(--quire-muted)] transition-all group-hover:bg-[var(--quire-text)] group-hover:text-[var(--quire-surface)]"><ArrowUpRight className="h-4 w-4" /></span>
             </button>
           </section>
 
-          <section>
-            <h2 className="text-lg font-medium mb-4 text-[var(--quire-text)]">Recent projects</h2>
-            <div className="bg-[var(--quire-surface)] border border-[var(--quire-border)] rounded-xl divide-y divide-[var(--quire-border)] overflow-hidden">
+          <section className="mt-14">
+            <div className="mb-4 flex items-end justify-between">
+              <div>
+                <p className="text-[11px] font-bold tracking-[0.13em] text-[var(--quire-muted)]">CONTINUE WRITING</p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em]">Recent projects</h2>
+              </div>
+              {!loading && projects.length > 0 ? <span className="mb-1 text-xs text-[var(--quire-muted)]">{projects.length} {projects.length === 1 ? "project" : "projects"}</span> : null}
+            </div>
+            <div className="divide-y divide-[var(--quire-border)] overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] shadow-[0_12px_30px_rgba(20,20,20,0.04)]">
               {loading ? (
-                <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[var(--quire-muted)]" /></div>
+                <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-[var(--quire-muted)]" /></div>
               ) : projects.length === 0 ? (
-                <div className="p-8 text-center text-[var(--quire-muted)] text-sm">
-                  No projects yet. Create one to get started.
+                <div className="p-10 text-center">
+                  <FileText className="mx-auto h-6 w-6 text-[var(--quire-muted)]" />
+                  <p className="mt-3 text-sm text-[var(--quire-muted)]">No projects yet. Your first document can start here.</p>
                 </div>
               ) : (
                 projects.map(p => (
                   <Link 
                     key={p.id} 
                     href={`/project/${p.id}`}
-                    className="flex items-center gap-4 p-4 hover:bg-[var(--quire-bg)] transition-colors"
+                    className="group flex items-center gap-4 px-5 py-5 transition-colors hover:bg-[var(--quire-surface-secondary)] sm:px-6"
                   >
-                    <FolderOpen className="w-5 h-5 text-[var(--quire-muted)]" />
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] text-[var(--quire-red)]"><FolderOpen className="h-5 w-5" /></span>
                     <div className="flex-1">
-                      <h3 className="font-medium">{p.name}</h3>
-                      <p className="text-xs text-[var(--quire-muted)] mt-0.5">Last updated {new Date(p.lastModified).toLocaleDateString()}</p>
+                      <h3 className="font-semibold tracking-[-0.02em]">{p.name}</h3>
+                      <p className="mt-1 text-xs text-[var(--quire-muted)]">Local project · Last edited {new Date(p.lastModified).toLocaleDateString()}</p>
                     </div>
+                    <span className="hidden rounded-md bg-[var(--quire-surface-secondary)] px-2 py-1 text-[10px] font-bold tracking-[0.1em] text-[var(--quire-muted)] sm:inline-flex">LATEX</span>
+                    <ArrowUpRight className="h-4 w-4 text-[var(--quire-muted)] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-[var(--quire-text)]" />
                   </Link>
                 ))
               )}
             </div>
+          </section>
+
+          <section className="mt-10 grid gap-3 border-t border-[var(--quire-border)] pt-6 text-xs text-[var(--quire-muted)] sm:grid-cols-3">
+            <p><span className="mr-2 text-[var(--quire-red)]">01</span>Your files stay on your machine.</p>
+            <p><span className="mr-2 text-[var(--quire-red)]">02</span>Compile with the tools you already use.</p>
+            <p><span className="mr-2 text-[var(--quire-red)]">03</span>Keep every project in plain files.</p>
           </section>
         </main>
       </div>

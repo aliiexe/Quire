@@ -1,41 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ProjectNode } from "@/lib/projects/storage";
 import { useWorkspaceStore } from "@/stores/workspace";
 
+function getAllFiles(nodes: ProjectNode[]): string[] {
+  return nodes.flatMap((node) => {
+    if (node.type === "file") return [node.path];
+    return node.children ? getAllFiles(node.children) : [];
+  });
+}
+
 export function QuickOpen({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const { tree, openFile } = useWorkspaceStore();
+  const { tree } = useWorkspaceStore();
   const [search, setSearch] = useState("");
-  const [results, setResults] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSearch("");
-      setResults(getAllFiles(tree));
-    }
-  }, [isOpen, tree]);
-
-  useEffect(() => {
+  const results = useMemo(() => {
     const all = getAllFiles(tree);
-    if (!search) {
-      setResults(all);
-      return;
-    }
+    if (!search) return all;
     const term = search.toLowerCase();
-    setResults(all.filter(path => path.toLowerCase().includes(term)));
+    return all.filter(path => path.toLowerCase().includes(term));
   }, [search, tree]);
 
-  const getAllFiles = (nodes: ProjectNode[]): string[] => {
-    let files: string[] = [];
-    for (const node of nodes) {
-      if (node.type === "file") files.push(node.path);
-      if (node.type === "directory" && node.children) {
-        files = [...files, ...getAllFiles(node.children)];
-      }
-    }
-    return files;
+  const close = () => {
+    setSearch("");
+    onClose();
   };
 
   const handleSelect = (path: string) => {
@@ -47,13 +36,13 @@ export function QuickOpen({ isOpen, onClose }: { isOpen: boolean, onClose: () =>
     // but the store `openFile` expects content. 
     // Actually, we can dispatch a custom event that Workspace listens to.
     window.dispatchEvent(new CustomEvent('quire-quick-open', { detail: path }));
-    onClose();
+    close();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/20" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/20" onClick={close}>
       <div 
         className="bg-[var(--quire-surface)] border border-[var(--quire-border)] w-full max-w-lg rounded-xl shadow-lg flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}

@@ -5,11 +5,10 @@ export const metadata: Metadata = {
   title: "Quire",
   description: "A modern, local-first workspace for LaTeX.",
   icons: {
-    icon: [
-      { url: '/brand/quire-mark-dark.png', media: '(prefers-color-scheme: light)' },
-      { url: '/brand/quire-mark-light.png', media: '(prefers-color-scheme: dark)' }
-    ]
-  }
+    icon: { url: "/icon.png", type: "image/png", sizes: "631x631" },
+    shortcut: "/favicon.ico",
+    apple: "/brand/quire-mark-light.png",
+  },
 };
 
 export default function RootLayout({

@@ -137,6 +137,13 @@ Start writing here.
     return project;
   }
 
+  async updateProject(projectId: string, updates: Partial<Omit<Project, "id">>): Promise<Project> {
+    const project = await this.getProject(projectId);
+    const nextProject: Project = { ...project, ...updates, id: projectId };
+    await fs.writeFile(this.getProjectConfigPath(projectId), JSON.stringify(nextProject, null, 2));
+    return nextProject;
+  }
+
   async listTree(projectId: string): Promise<ProjectNode[]> {
     const projectPath = this.getProjectPath(projectId);
     

@@ -1,6 +1,6 @@
 "use client";
 
-import { File, FileText, Folder, FolderOpen, Image as ImageIcon, MoreVertical, ChevronRight, ChevronDown } from "lucide-react";
+import { File, FileText, Image as ImageIcon, MoreVertical, ChevronRight, ChevronDown } from "lucide-react";
 import { ProjectNode } from "@/lib/projects/storage";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -27,7 +27,6 @@ export function ProjectTree({ nodes, selectedPath, onSelect, level = 0 }: Projec
     <div className="w-full text-[13px]">
       {nodes.map((node, i) => {
         const isDir = node.type === "directory";
-        const isExpanded = isDir ? expandedFolders[node.path] !== false : false; // default open? Or default closed. Let's make it expanded by default if it's not set. Actually, standard is default closed unless root. Let's just do expandedFolders[node.path] or if level is 0.
         const actuallyExpanded = isDir ? (expandedFolders[node.path] !== undefined ? expandedFolders[node.path] : level === 0) : false;
         const isSelected = node.path === selectedPath;
         const dirty = isDirty[node.path];

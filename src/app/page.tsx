@@ -15,7 +15,7 @@ import { SmoothScroll } from "@/components/marketing/SmoothScroll";
 export default function MarketingPage() {
   return (
     <SmoothScroll>
-      <div className="flex min-h-screen flex-col bg-[var(--quire-bg)]">
+      <div className="marketing-shell flex min-h-screen flex-col">
         <Navbar />
         <main className="flex-1 overflow-x-hidden">
           <Hero />

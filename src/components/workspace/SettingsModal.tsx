@@ -1,10 +1,10 @@
 "use client";
 
-import { Settings as SettingsIcon, X, Check, ChevronDown, Monitor, Sun, Moon } from "lucide-react";
+import { X, Check, ChevronDown, Monitor, Sun, Moon } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Select from "@radix-ui/react-select";
 import { Project } from "@/lib/projects/storage";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface SettingsModalProps {
   project: Project | null;
@@ -13,14 +13,11 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps) {
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("quire:theme") as any;
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-    }
-  }, []);
+  const [theme, setTheme] = useState<"system" | "light" | "dark">(() => {
+    if (typeof window === "undefined") return "system";
+    const stored = localStorage.getItem("quire:theme");
+    return stored === "light" || stored === "dark" ? stored : "system";
+  });
 
   const handleThemeChange = (newTheme: "system" | "light" | "dark") => {
     setTheme(newTheme);
@@ -84,7 +81,7 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
                 {/* Compiler */}
                 <div className="flex items-center justify-between p-3.5">
                   <label className="font-medium">Compiler</label>
-                  <Select.Root value={project.compiler} onValueChange={(val) => onUpdate({ compiler: val as any })}>
+                  <Select.Root value={project.compiler} onValueChange={(val) => onUpdate({ compiler: val as Project["compiler"] })}>
                     <Select.Trigger className="inline-flex items-center gap-2 justify-between rounded-lg px-3 py-1.5 text-sm bg-[var(--quire-surface)] border border-[var(--quire-border)] w-[140px] outline-none focus:border-[var(--quire-text)] shadow-sm transition-all">
                       <Select.Value />
                       <Select.Icon>
@@ -142,7 +139,7 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
                       checked={project.autoCompile}
                       onChange={(e) => onUpdate({ autoCompile: e.target.checked })}
                     />
-                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-text)] peer-checked:after:border-white shadow-inner"></div>
+                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
                   </label>
                 </div>
 
@@ -160,7 +157,7 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
                       checked={project.synctex}
                       onChange={(e) => onUpdate({ synctex: e.target.checked })}
                     />
-                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-text)] peer-checked:after:border-white shadow-inner"></div>
+                    <div className="w-9 h-5 bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
                   </label>
                 </div>
                 

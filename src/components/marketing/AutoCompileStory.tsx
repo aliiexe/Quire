@@ -2,105 +2,77 @@
 
 import { useRef, useState } from "react";
 import gsap from "gsap";
-import ScrollTrigger from "gsap/ScrollTrigger";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-
 
 gsap.registerPlugin(ScrollTrigger);
 
+const steps = [
+  { title: "Edit with focus.", body: "A quiet editor gives source the space it deserves, with generous type, subdued syntax, and only the information you need.", label: "Step 01 · Edit" },
+  { title: "Save without thinking.", body: "Your open files make their state clear. Save when you choose, or keep auto compile ready for the moment you pause.", label: "Step 02 · Save" },
+  { title: "Compile locally.", body: "Run a real local build from the workspace. No upload, no queue, and no hand-off to a remote editor.", label: "Step 03 · Compile" },
+  { title: "See the document.", body: "The continuous PDF preview stays beside your source with page controls, fit width, zoom, and download when it is ready.", label: "Step 04 · Preview" },
+];
+
 export function AutoCompileStory() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const leftColRef = useRef<HTMLDivElement>(null);
-  const rightColRef = useRef<HTMLDivElement>(null);
-  const [imageError, setImageError] = useState(false);
+  const section = useRef<HTMLElement>(null);
+  const [active, setActive] = useState(0);
 
   useGSAP(() => {
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReducedMotion) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const media = gsap.matchMedia();
 
-    ScrollTrigger.create({
-      trigger: containerRef.current,
-      start: "top top",
-      end: "bottom bottom",
-      pin: rightColRef.current,
-      pinSpacing: false,
-    });
-
-    const steps = gsap.utils.toArray<HTMLElement>(".compile-step");
-    
-    steps.forEach((step, i) => {
-      gsap.fromTo(
-        step,
-        { opacity: 0.2 },
-        {
-          opacity: 1,
-          scrollTrigger: {
-            trigger: step,
-            start: "top center",
-            end: "bottom center",
-            scrub: true,
-            toggleClass: "active-step",
+    media.add("(min-width: 1024px)", () => {
+      let current = -1;
+      const trigger = ScrollTrigger.create({
+        trigger: section.current,
+        start: "top top",
+        end: "+=300%",
+        pin: true,
+        pinSpacing: true,
+        anticipatePin: 1,
+        onUpdate: (self) => {
+          const next = Math.min(steps.length - 1, Math.floor(self.progress * steps.length));
+          if (next !== current) {
+            current = next;
+            setActive(next);
           }
-        }
-      );
+        },
+      });
+
+      return () => trigger.kill();
     });
-  }, { scope: containerRef });
+
+    return () => media.revert();
+  }, { scope: section });
+
+  const selected = steps[active];
 
   return (
-    <section ref={containerRef} className="relative w-full max-w-7xl mx-auto px-6 lg:px-8 pb-32 md:pb-48">
-      {/* We need some top padding to let the pinning kick in smoothly */}
-      <div className="pt-32 md:pt-48">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24">
-          {/* Left Column (Scrolling) */}
-          <div ref={leftColRef} className="lg:col-span-1 space-y-[40vh] pb-[40vh]">
-            <div className="compile-step text-4xl md:text-5xl font-medium tracking-tight">
-              <h3>1. Edit seamlessly.</h3>
-              <p className="mt-4 text-xl text-neutral-600 dark:text-neutral-400 font-normal">
-                Type your LaTeX code as you normally would, with powerful autocomplete and syntax highlighting.
-              </p>
-            </div>
-            
-            <div className="compile-step text-4xl md:text-5xl font-medium tracking-tight">
-              <h3>2. Hit save.</h3>
-              <p className="mt-4 text-xl text-neutral-600 dark:text-neutral-400 font-normal">
-                No need to run complex command-line scripts or configure build pipelines manually.
-              </p>
-            </div>
-
-            <div className="compile-step text-4xl md:text-5xl font-medium tracking-tight">
-              <h3>3. Auto-compile.</h3>
-              <p className="mt-4 text-xl text-neutral-600 dark:text-neutral-400 font-normal">
-                Quire uses its integrated engine to process your documents blazingly fast in the background.
-              </p>
-            </div>
-
-            <div className="compile-step text-4xl md:text-5xl font-medium tracking-tight">
-              <h3>4. Instant Preview.</h3>
-              <p className="mt-4 text-xl text-neutral-600 dark:text-neutral-400 font-normal">
-                Your PDF updates instantly. Everything is synced down to the precise line you are editing.
-              </p>
+    <section ref={section} className="mk-workflow">
+      <div className="mk-grid mk-workflow__pin">
+          <div className="mk-workflow__visual">
+            <div className="mk-workflow__brand-stage">
+            <span key={selected.label} className="mk-workflow__step-number">{String(active + 1).padStart(2, "0")}</span>
             </div>
           </div>
-          
-          {/* Right Column (Pinned) */}
-          <div className="hidden lg:block lg:col-span-1">
-            <div ref={rightColRef} className="h-screen flex items-center justify-center sticky top-0">
-              <div className="w-full relative rounded-2xl overflow-hidden shadow-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 aspect-square flex items-center justify-center">
-                {!imageError ? (
-                  <img
-                    src="/marketing/auto-compile.png"
-                    alt="Auto Compile Workflow"
-                    className="w-full h-full absolute inset-0 object-cover"
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <div className="text-center p-8">
-                    <div className="w-24 h-24 rounded-full border-4 border-dashed border-neutral-300 dark:border-neutral-700 animate-spin-slow mx-auto mb-6"></div>
-                    <p className="text-xl font-medium text-neutral-600 dark:text-neutral-400">Integrated Compilation Engine</p>
-                  </div>
-                )}
-              </div>
-            </div>
+        <div>
+          <div className="mk-workflow__copy" key={selected.label}>
+            <p className="mk-workflow__index">{selected.label}</p>
+            <h2>{selected.title}</h2>
+            <p>{selected.body}</p>
+          </div>
+          <div className="mk-workflow__progress" aria-label="Workflow steps">
+            {steps.map((step, index) => <button key={step.label} type="button" aria-label={step.label} aria-current={active === index} onClick={() => setActive(index)} />)}
+          </div>
+          <div className="mk-workflow__mobile-steps">
+            {steps.map((step) => (
+              <article key={step.label} className="mk-workflow__mobile-step">
+                <p className="mk-workflow__index">{step.label}</p>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </div>

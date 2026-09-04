@@ -1,65 +1,39 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import gsap from "gsap";
-import ScrollTrigger from "gsap/ScrollTrigger";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-
 
 gsap.registerPlugin(ScrollTrigger);
 
 export function EditorStory() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [imageError, setImageError] = useState(false);
+  const section = useRef<HTMLElement>(null);
 
   useGSAP(() => {
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReducedMotion) return;
-
-    gsap.fromTo(
-      ".story-text",
-      { y: 40, opacity: 0 },
-      {
-        y: 0,
-        opacity: 1,
-        stagger: 0.1,
-        duration: 0.8,
-        ease: "power2.out",
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: "top 70%",
-        }
-      }
-    );
-  }, { scope: containerRef });
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    gsap.fromTo("[data-intro]", { opacity: 0, y: 28 }, {
+      opacity: 1,
+      y: 0,
+      duration: .82,
+      stagger: .12,
+      ease: "power3.out",
+      scrollTrigger: { trigger: section.current, start: "top 68%" },
+    });
+  }, { scope: section });
 
   return (
-    <section ref={containerRef} className="py-32 md:py-48 max-w-7xl mx-auto px-6 lg:px-8">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-center">
-        <div className="lg:col-span-5 flex flex-col justify-center">
-          <h2 className="story-text text-4xl md:text-5xl font-medium tracking-tight text-neutral-900 dark:text-neutral-50 opacity-0">
-            A calmer place to write LaTeX.
-          </h2>
-          <p className="story-text mt-6 text-lg md:text-xl text-neutral-600 dark:text-neutral-400 opacity-0">
-            Forget about archaic editors and complex setups. Quire gives you a distraction-free writing environment that lets you focus on your thoughts, not your tools.
-          </p>
-        </div>
-        
-        <div className="lg:col-span-7">
-          {!imageError ? (
-            <div className="story-text opacity-0 relative rounded-2xl overflow-hidden shadow-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 aspect-[4/3]">
-              <img
-                src="/marketing/editor-story.png"
-                alt="Editor Experience"
-                className="w-full h-full absolute inset-0 object-cover object-left"
-                onError={() => setImageError(true)}
-              />
-            </div>
-          ) : (
-            <div className="story-text opacity-0 w-full aspect-[4/3] rounded-2xl bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-900 flex items-center justify-center p-12 text-center border border-neutral-200 dark:border-neutral-800">
-               <span className="text-neutral-400 dark:text-neutral-600 text-lg font-medium">Distraction-free environment</span>
-            </div>
-          )}
+    <section ref={section} id="product" className="mk-intro">
+      <div className="mk-grid">
+        <div className="mk-intro__head">
+          <div>
+            <p data-intro className="mk-eyebrow text-[var(--quire-red)]">A better writing surface</p>
+            <h2 data-intro className="mk-display mt-5">Made for the work, not the setup.</h2>
+          </div>
+          <div>
+            <p data-intro className="mk-body">Quire keeps your source, build controls, and real PDF output together in one clear workspace. Nothing to configure before the ideas arrive.</p>
+            <p data-intro className="mk-note"><span>01</span> A true local workspace with no cloud compile queue.</p>
+          </div>
         </div>
       </div>
     </section>

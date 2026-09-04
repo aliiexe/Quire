@@ -16,6 +16,11 @@ interface PageDimensions {
   height: number;
 }
 
+interface PdfRenderTask {
+  promise: Promise<void>;
+  cancel: () => void;
+}
+
 export function PDFViewer({ url, onDownload }: PDFViewerProps) {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
@@ -235,7 +240,8 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
   const [isVisible, setIsVisible] = useState(false);
   const [dimensions, setDimensions] = useState<PageDimensions>(baseDimensions);
   const [renderedScale, setRenderedScale] = useState(0);
-  const [renderedDoc, setRenderedDoc] = useState<any>(null);
+  const [renderedDoc, setRenderedDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const renderTaskRef = useRef<PdfRenderTask | null>(null);
 
   // Observe visibility
   useEffect(() => {
@@ -260,22 +266,26 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
     };
   }, [observer]);
 
-  // Render Page
+  // Render Page. PDF.js only allows one render task per canvas, so always
+  // cancel and settle an earlier task before reusing this page's canvas.
   useEffect(() => {
     if (!isVisible || !canvasRef.current || (scale === renderedScale && pdfDoc === renderedDoc)) return;
     
-    let isMounted = true;
+    let cancelled = false;
     const canvas = canvasRef.current;
     
     const render = async () => {
       try {
         const page = await pdfDoc.getPage(pageNumber);
+        if (cancelled) return;
         
         // Update precise dimensions just in case this page differs from baseDimensions
         const unscaledViewport = page.getViewport({ scale: 1 });
-        if (unscaledViewport.width !== dimensions.width || unscaledViewport.height !== dimensions.height) {
-          setDimensions({ width: unscaledViewport.width, height: unscaledViewport.height });
-        }
+        setDimensions((current) =>
+          current.width === unscaledViewport.width && current.height === unscaledViewport.height
+            ? current
+            : { width: unscaledViewport.width, height: unscaledViewport.height }
+        );
         
         // CSS Display dimensions
         const cssWidth = unscaledViewport.width * scale;
@@ -288,6 +298,19 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
         // We will scale the viewport natively to the full output resolution, and NOT use a transform matrix.
         const renderViewport = page.getViewport({ scale: scale * outputScale });
         
+        const previousTask = renderTaskRef.current;
+        if (previousTask) {
+          previousTask.cancel();
+          try {
+            await previousTask.promise;
+          } catch (error) {
+            if (!(error instanceof Error) || error.name !== "RenderingCancelledException") {
+              console.error(`Error cancelling page ${pageNumber} render:`, error);
+            }
+          }
+        }
+        if (cancelled) return;
+
         canvas.width = Math.floor(cssWidth * outputScale);
         canvas.height = Math.floor(cssHeight * outputScale);
         canvas.style.width = `${Math.floor(cssWidth)}px`;
@@ -296,19 +319,25 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
         const context = canvas.getContext("2d");
         if (!context) return;
         
-        const renderContext: any = {
+        const renderContext = {
+          canvas,
           canvasContext: context,
           viewport: renderViewport,
           // Removed `transform` here because `renderViewport` is already scaled by `outputScale`
         };
         
-        await page.render(renderContext).promise;
-        if (isMounted) {
+        const renderTask = page.render(renderContext);
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+        if (renderTaskRef.current === renderTask) {
+          renderTaskRef.current = null;
+        }
+        if (!cancelled) {
           setRenderedScale(scale);
           setRenderedDoc(pdfDoc);
         }
       } catch (error) {
-        if ((error as any)?.name === "RenderingCancelledException") {
+        if (error instanceof Error && error.name === "RenderingCancelledException") {
           // Ignore cancelled renders
         } else {
           console.error(`Error rendering page ${pageNumber}:`, error);
@@ -317,8 +346,12 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
     };
     
     render();
-    return () => { isMounted = false; };
-  }, [isVisible, scale, pdfDoc, pageNumber, dimensions, renderedScale, renderedDoc]);
+    return () => {
+      cancelled = true;
+      renderTaskRef.current?.cancel();
+      renderTaskRef.current = null;
+    };
+  }, [isVisible, scale, pdfDoc, pageNumber, renderedScale, renderedDoc]);
 
   // Compute placeholder styles
   const cssWidth = dimensions.width * scale;
@@ -327,7 +360,7 @@ function PDFPageNode({ pageNumber, pdfDoc, scale, baseDimensions, observer, onRe
   return (
     <div 
       ref={(el) => {
-        (containerRef as any).current = el;
+        containerRef.current = el;
         onRef(el);
       }}
       data-page={pageNumber}

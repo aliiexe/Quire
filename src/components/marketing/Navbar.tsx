@@ -57,7 +57,7 @@ export function Navbar() {
           <Link href="#product" onClick={handleSectionLink}>Product</Link>
           <Link href="#features" onClick={handleSectionLink}>Features</Link>
           <Link href="#open-source" onClick={handleSectionLink}>Open Source</Link>
-          <Link href="#pricing" onClick={handleSectionLink}>Pricing</Link>
+          <Link href="#free" onClick={handleSectionLink}>Free &amp; Open</Link>
           <Link href="#faq" onClick={handleSectionLink}>Docs</Link>
         </nav>
         <div className="mk-nav__actions">
@@ -90,7 +90,7 @@ export function Navbar() {
           <Link href="#product" onClick={handleSectionLink}><span>01</span>Product</Link>
           <Link href="#features" onClick={handleSectionLink}><span>02</span>Features</Link>
           <Link href="#open-source" onClick={handleSectionLink}><span>03</span>Open Source</Link>
-          <Link href="#pricing" onClick={handleSectionLink}><span>04</span>Pricing</Link>
+          <Link href="#free" onClick={handleSectionLink}><span>04</span>Free &amp; Open</Link>
           <Link href="#faq" onClick={handleSectionLink}><span>05</span>Docs</Link>
         </div>
         <div className="mk-nav__mobile-footer">

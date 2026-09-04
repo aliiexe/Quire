@@ -12,12 +12,22 @@ export function Hero() {
   useGSAP(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const timeline = gsap.timeline({ defaults: { ease: "power3.out" } });
-    timeline
-      .fromTo("[data-hero=eyebrow]", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .55 })
-      .fromTo("[data-hero=title]", { opacity: 0, y: 42 }, { opacity: 1, y: 0, duration: 1.05 }, "-=.18")
-      .fromTo("[data-hero=lede]", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .65 }, "-=.55")
-      .fromTo("[data-hero=actions]", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .55 }, "-=.42");
+    const playHeroEntrance = () => {
+      const timeline = gsap.timeline({ defaults: { ease: "power3.out" } });
+      timeline
+        .fromTo("[data-hero=eyebrow]", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .55 })
+        .fromTo("[data-hero=title]", { opacity: 0, y: 42 }, { opacity: 1, y: 0, duration: 1.05 }, "-=.18")
+        .fromTo("[data-hero=lede]", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .65 }, "-=.55")
+        .fromTo("[data-hero=actions]", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .55 }, "-=.42");
+    };
+
+    if (document.documentElement.dataset.quireIntro === "done") {
+      playHeroEntrance();
+      return;
+    }
+
+    window.addEventListener("quire:intro-complete", playHeroEntrance, { once: true });
+    return () => window.removeEventListener("quire:intro-complete", playHeroEntrance);
   }, { scope: container });
 
   return (

@@ -2,37 +2,19 @@ export const siteConfig = {
   name: "Quire",
   description: "Write beautifully. Compile locally.",
   links: {
-    github: "https://github.com/quire/quire",
+    github: "https://github.com/aliiexe/Quire",
     twitter: "https://twitter.com/quire_app",
   },
 };
 
 export const pricingTiers = [
   {
-    name: "Local",
+    name: "Quire",
     price: "Free forever",
-    description: "Everything you need to write and compile locally.",
-    features: ["Local-first architecture", "Open source", "Unlimited builds", "Core LaTeX packages"],
-    cta: "Download now",
-    href: "/app",
-  },
-  {
-    name: "Cloud",
-    price: "Coming soon",
-    description: "Cloud sync and collaboration features.",
-    features: ["Everything in Local", "Cloud synchronization", "Web-based editor", "Version history"],
-    cta: "Join waitlist",
-    href: "#",
-    disabled: true,
-  },
-  {
-    name: "Team",
-    price: "Coming soon",
-    description: "For teams and organizations.",
-    features: ["Everything in Cloud", "Real-time collaboration", "Custom templates", "Priority support"],
-    cta: "Join waitlist",
-    href: "#",
-    disabled: true,
+    description: "Everything you need to write and compile locally, free and open source.",
+    features: ["Local-first architecture", "Open source", "Unlimited local projects", "Core LaTeX packages"],
+    cta: "Download for macOS",
+    href: "https://github.com/aliiexe/Quire/releases",
   },
 ];
 
@@ -43,10 +25,10 @@ export const faqs = [
   },
   {
     question: "Is it really free?",
-    answer: "The local version is free and open-source forever. We plan to offer paid cloud and team features in the future.",
+    answer: "Yes. Quire is free and open source, with no paid tiers or required cloud service.",
   },
   {
     question: "Do I need an internet connection?",
-    answer: "No, Quire compiles everything locally on your machine. You only need internet to download it initially or to use future cloud features.",
+    answer: "No, Quire compiles everything locally on your machine. You only need internet to download the app or visit its source code.",
   },
 ];

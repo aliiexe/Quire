@@ -11,11 +11,13 @@ import { FAQ } from "@/components/marketing/FAQ";
 import { FinalCTA } from "@/components/marketing/FinalCTA";
 import { Footer } from "@/components/marketing/Footer";
 import { SmoothScroll } from "@/components/marketing/SmoothScroll";
+import { SiteIntro } from "@/components/marketing/SiteIntro";
 
 export default function MarketingPage() {
   return (
     <SmoothScroll>
       <div className="marketing-shell flex min-h-screen flex-col">
+        <SiteIntro />
         <Navbar />
         <main className="flex-1 overflow-x-hidden">
           <Hero />

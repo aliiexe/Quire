@@ -10,7 +10,7 @@ export function OpenSource() {
           <h2 className="mk-display mt-5">Open by design.</h2>
         </div>
         <div>
-          <p>Research tools should be inspectable, durable, and free to make your own. Quire uses open formats and keeps its local core open.</p>
+          <p>Research tools should be inspectable, durable, and free to make your own. Quire is free and open source, with open formats, no paid tiers, and no required cloud service.</p>
           <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-button mk-button--ghost mt-7">View on GitHub <ArrowUpRight size={16} /></a>
           <span className="mk-opensource__line">Your writing should outlast your software.</span>
         </div>

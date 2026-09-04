@@ -10,11 +10,11 @@ export function Footer() {
           <Image className="mk-footer__wordmark" src="/brand/quire-wordmark-light.png" alt="Quire" width={1280} height={631} />
           <nav className="mk-footer__links" aria-label="Footer navigation">
             <Link href="#product">Product</Link><Link href="#features">Features</Link>
-            <Link href="#pricing">Pricing</Link><Link href="#faq">Questions</Link>
-            <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><a href={QUIRE_MAC_DOWNLOAD_URL}>Download for macOS</a>
+            <Link href="#free">Free &amp; Open</Link><Link href="#faq">Questions</Link>
+            <Link href="/privacy">Privacy</Link><a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><a href={QUIRE_MAC_DOWNLOAD_URL}>Download for macOS</a>
           </nav>
         </div>
-        <div className="mk-footer__bottom"><span>© {new Date().getFullYear()} Quire</span><span>Write beautifully. Compile locally.</span></div>
+        <div className="mk-footer__bottom"><span>© {new Date().getFullYear()} Quire</span><span>Free, open source, and local-first.</span></div>
       </div>
     </footer>
   );

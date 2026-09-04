@@ -9,7 +9,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "desktop:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && electron .\"",
-    "desktop:build": "npm run build && electron-builder --mac dmg --arm64 --x64",
+    "build:dmg-background": "node scripts/build-dmg-background.cjs",
+    "desktop:build": "npm run build && npm run build:dmg-background && electron-builder --mac dmg --arm64 --x64",
     "lint": "eslint",
     "doctor": "npx tsx scripts/doctor.ts"
   },
@@ -40,14 +41,34 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "public/brand/quire-mark-dark.png",
       "target": [
         "dmg"
-      ],
-      "icon": "electron/assets/quire.icns"
+      ]
     },
     "dmg": {
       "title": "Quire ${version}",
-      "icon": "electron/assets/quire.icns"
+      "icon": "public/brand/quire-mark-dark.png",
+      "background": "build/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "iconSize": 112,
+      "iconTextSize": 14,
+      "contents": [
+        {
+          "x": 145,
+          "y": 186,
+          "type": "file"
+        },
+        {
+          "x": 395,
+          "y": 186,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "publish": [
       {

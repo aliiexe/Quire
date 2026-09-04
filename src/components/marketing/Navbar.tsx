@@ -3,8 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { MouseEvent, useEffect, useState } from "react";
-import { ArrowUpRight, Menu, Moon, Sun, X } from "lucide-react";
+import { ArrowUpRight, Download, Menu, Moon, Sun, X } from "lucide-react";
 import { useSmoothScroll } from "./SmoothScroll";
+import { QUIRE_MAC_DOWNLOAD_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -60,7 +61,7 @@ export function Navbar() {
           <Link href="#faq" onClick={handleSectionLink}>Docs</Link>
         </nav>
         <div className="mk-nav__actions">
-          <a className="mk-nav__github" href="https://github.com/quire/quire" target="_blank" rel="noreferrer">GitHub</a>
+          <a className="mk-nav__github" href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a>
           <button
             type="button"
             className="mk-theme-toggle"
@@ -70,7 +71,7 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <Link href="/app" className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`}>Open Quire</Link>
+          <a href={QUIRE_MAC_DOWNLOAD_URL} className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`}>Download macOS</a>
           <button
             type="button"
             className="mk-nav__menu-toggle"
@@ -93,8 +94,8 @@ export function Navbar() {
           <Link href="#faq" onClick={handleSectionLink}><span>05</span>Docs</Link>
         </div>
         <div className="mk-nav__mobile-footer">
-          <a href="https://github.com/quire/quire" target="_blank" rel="noreferrer" onClick={() => setMobileMenuOpen(false)}>GitHub <ArrowUpRight size={15} /></a>
-          <Link href="/app" className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)}>Open Quire <ArrowUpRight size={16} /></Link>
+          <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={() => setMobileMenuOpen(false)}>GitHub <ArrowUpRight size={15} /></a>
+          <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)}>Download macOS <Download size={16} /></a>
         </div>
       </nav>
     </header>

@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
+import { QUIRE_REPOSITORY_URL } from "@/lib/links";
 
 export function OpenSource() {
   return (
@@ -10,7 +11,7 @@ export function OpenSource() {
         </div>
         <div>
           <p>Research tools should be inspectable, durable, and free to make your own. Quire uses open formats and keeps its local core open.</p>
-          <a href="https://github.com/quire/quire" target="_blank" rel="noreferrer" className="mk-button mk-button--ghost mt-7">View on GitHub <ArrowUpRight size={16} /></a>
+          <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-button mk-button--ghost mt-7">View on GitHub <ArrowUpRight size={16} /></a>
           <span className="mk-opensource__line">Your writing should outlast your software.</span>
         </div>
       </div>

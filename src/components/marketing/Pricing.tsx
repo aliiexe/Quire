@@ -1,7 +1,7 @@
-import Link from "next/link";
+import { QUIRE_MAC_DOWNLOAD_URL } from "@/lib/links";
 
 const tiers = [
-  { name: "Local", price: "Free forever", details: "Unlimited local projects · Local compilation · PDF preview · Auto compile · Light + dark", action: "Open Quire", href: "/app" },
+  { name: "Local", price: "Free forever", details: "Unlimited local projects · Local compilation · PDF preview · Auto compile · Light + dark", action: "Download for macOS", href: QUIRE_MAC_DOWNLOAD_URL },
   { name: "Cloud", price: "$7 / month", details: "Sync and browser access for your files. A future Quire release.", status: "Coming soon" },
   { name: "Team", price: "$15 / user / month", details: "Shared workspaces, comments, and team libraries. A future Quire release.", status: "Coming soon" },
 ];
@@ -18,7 +18,7 @@ export function Pricing() {
               <h3 className="mk-price__name">{tier.name}</h3>
               <p className="mk-price__price">{tier.price}</p>
               <p className="mk-price__detail">{tier.details}</p>
-              {tier.href ? <Link href={tier.href} className="mk-button mk-button--dark">{tier.action}</Link> : <span className="mk-price__status">{tier.status}</span>}
+              {tier.href ? <a href={tier.href} className="mk-button mk-button--dark">{tier.action}</a> : <span className="mk-price__status">{tier.status}</span>}
             </article>
           ))}
         </div>

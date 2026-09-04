@@ -1,13 +1,61 @@
 {
   "name": "quire",
   "version": "0.1.0",
+  "description": "A calm, local-first macOS workspace for writing and compiling LaTeX.",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
+    "desktop:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && electron .\"",
+    "desktop:build": "npm run build && electron-builder --mac dmg --arm64 --x64",
     "lint": "eslint",
     "doctor": "npx tsx scripts/doctor.ts"
+  },
+  "build": {
+    "appId": "com.aliiexe.quire",
+    "productName": "Quire",
+    "artifactName": "Quire-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "next"
+      },
+      {
+        "from": ".next/static",
+        "to": "next/.next/static"
+      },
+      {
+        "from": "public",
+        "to": "next/public"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "electron/assets/quire.icns"
+    },
+    "dmg": {
+      "title": "Quire ${version}",
+      "icon": "electron/assets/quire.icns"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "aliiexe",
+        "repo": "Quire"
+      }
+    ]
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
@@ -44,9 +92,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
   }
 }

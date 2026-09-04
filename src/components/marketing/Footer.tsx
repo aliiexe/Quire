@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { QUIRE_MAC_DOWNLOAD_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
 
 export function Footer() {
   return (
@@ -10,7 +11,7 @@ export function Footer() {
           <nav className="mk-footer__links" aria-label="Footer navigation">
             <Link href="#product">Product</Link><Link href="#features">Features</Link>
             <Link href="#pricing">Pricing</Link><Link href="#faq">Questions</Link>
-            <a href="https://github.com/quire/quire" target="_blank" rel="noreferrer">GitHub</a><Link href="/app">Open Quire</Link>
+            <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><a href={QUIRE_MAC_DOWNLOAD_URL}>Download for macOS</a>
           </nav>
         </div>
         <div className="mk-footer__bottom"><span>© {new Date().getFullYear()} Quire</span><span>Write beautifully. Compile locally.</span></div>

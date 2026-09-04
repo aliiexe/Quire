@@ -82,6 +82,39 @@ npm run build
 npm start
 ```
 
+## macOS app and DMG builds
+
+Quire is packaged for macOS with Electron. The installed app opens directly into the local workspace, keeps projects in `~/Documents/Quire` by default, and runs the bundled Quire server only on `127.0.0.1`.
+
+### Run the desktop app during development
+
+```bash
+npm run desktop:dev
+```
+
+This starts the Next.js development server, waits until it is ready, and opens Quire in its native macOS window.
+
+### Build installers
+
+```bash
+npm run desktop:build
+```
+
+The command creates two DMG installers in `release/`:
+
+| Installer | Macs |
+| --- | --- |
+| `Quire-<version>-arm64.dmg` | Apple Silicon: M1, M2, M3, M4, and later |
+| `Quire-<version>-x64.dmg` | Intel Macs |
+
+Upload both files to a GitHub Release so the **Download for macOS** actions on the landing page lead users to the available installers.
+
+### Before publishing publicly
+
+Local DMG builds are suitable for testing, but public macOS releases should be signed with a valid Apple Developer ID and notarized by Apple. Without that, Gatekeeper will show an unidentified-developer warning to people who download Quire.
+
+Set up a Developer ID Application certificate and Apple notarization credentials in your release environment before publishing a public release. Electron Builder detects valid signing credentials and applies them during the packaging step.
+
 ## Everyday workflow
 
 1. Create a blank article or report, or import an existing ZIP project.

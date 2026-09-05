@@ -209,12 +209,25 @@ ${body}
     return { content };
   }
 
+  async readBinaryFile(projectId: string, filePath: string): Promise<Uint8Array> {
+    const projectPath = this.getProjectPath(projectId);
+    const targetPath = getSafePath(projectPath, filePath);
+    return fs.readFile(targetPath);
+  }
+
   async writeFile(projectId: string, filePath: string, content: string): Promise<void> {
     const projectPath = this.getProjectPath(projectId);
     const targetPath = getSafePath(projectPath, filePath);
     
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.writeFile(targetPath, content, "utf-8");
+  }
+
+  async writeBinaryFile(projectId: string, filePath: string, content: Uint8Array): Promise<void> {
+    const projectPath = this.getProjectPath(projectId);
+    const targetPath = getSafePath(projectPath, filePath);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, content);
   }
 
   async createFile(projectId: string, filePath: string): Promise<void> {

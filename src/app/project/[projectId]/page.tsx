@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, PanelImperativeHandle } from "react-resizable-panels";
 import { useRef } from "react";
-import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen, Upload, FileText, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { QuireMark } from "@/components/brand/logo";
@@ -20,11 +20,20 @@ import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { WritingAssistant, type WritingSelection } from "@/components/ai/WritingAssistant";
 
 const EDITABLE_TEXT_EXTENSIONS = new Set([".tex", ".txt", ".bib", ".sty", ".cls", ".md", ".json", ".yaml", ".yml"]);
+const IMAGE_ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"]);
 
 function isEditableTextFile(path: string) {
   const extension = path.slice(path.lastIndexOf(".")).toLowerCase();
   return EDITABLE_TEXT_EXTENSIONS.has(extension);
 }
+
+function assetKind(path: string): "image" | "pdf" | null {
+  const extension = path.slice(path.lastIndexOf(".")).toLowerCase();
+  if (extension === ".pdf") return "pdf";
+  return IMAGE_ASSET_EXTENSIONS.has(extension) ? "image" : null;
+}
+
+type ProjectAsset = { path: string; kind: "image" | "pdf" };
 
 type DesktopMenuCommand =
   | { type: "new-file" | "new-folder" | "save-all" | "recompile" | "export-pdf" | "toggle-explorer" }
@@ -53,11 +62,14 @@ export default function Workspace() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState("");
   const [newFolderError, setNewFolderError] = useState("");
+  const [previewedAsset, setPreviewedAsset] = useState<ProjectAsset | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [assistantSelection, setAssistantSelection] = useState<WritingSelection | null>(null);
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
   const [unsavedAction, setUnsavedAction] = useState<{ type: "dashboard" } | { type: "close-file"; path: string } | null>(null);
   const explorerPanelRef = useRef<PanelImperativeHandle>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const compileInFlightRef = useRef(false);
   const autoCompileWasEnabledRef = useRef(false);
@@ -187,7 +199,14 @@ export default function Workspace() {
 
   // Handle file selection
   const handleSelectFile = useCallback(async (path: string) => {
+    const nextAssetKind = assetKind(path);
+    if (nextAssetKind) {
+      setPreviewedAsset({ path, kind: nextAssetKind });
+      return;
+    }
     if (!isEditableTextFile(path)) return;
+
+    setPreviewedAsset(null);
 
     if (!openFiles.includes(path)) {
         const res = await fetch(`/api/projects/${params.projectId}/files?path=${encodeURIComponent(path)}`);
@@ -244,6 +263,14 @@ export default function Workspace() {
     setAssistantSelection({ from: selection.from, to: selection.from + replacement.length, text: replacement });
     return true;
   }, [activeFile, fileContents, updateFileContent]);
+
+  const replaceActiveDocumentFromDraft = useCallback((replacement: string) => {
+    if (!activeFile || !isEditableTextFile(activeFile) || !replacement.trim()) return false;
+    updateFileContent(activeFile, replacement);
+    setAssistantSelection(null);
+    setPreviewedAsset(null);
+    return true;
+  }, [activeFile, updateFileContent]);
 
   useEffect(() => {
     setAssistantSelection(null);
@@ -325,6 +352,29 @@ export default function Workspace() {
       setNewFolderError(error instanceof Error ? error.message : "Unable to create the folder.");
     }
   }, [newFolderPath, params.projectId, refreshTree, setDiagnostics]);
+
+  const uploadAsset = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const data = new FormData();
+      data.set("file", file);
+      const response = await fetch(`/api/projects/${params.projectId}/files`, { method: "POST", body: data });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to upload the file.");
+
+      await refreshTree();
+      const uploadedPath = typeof result.path === "string" ? result.path : `assets/${file.name}`;
+      const uploadedKind = assetKind(uploadedPath);
+      if (uploadedKind) setPreviewedAsset({ path: uploadedPath, kind: uploadedKind });
+      setDiagnostics([{ severity: "info", message: `Uploaded “${file.name}” to assets.` }]);
+    } catch (error) {
+      setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "Unable to upload the file." }]);
+    } finally {
+      setIsUploading(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  }, [params.projectId, refreshTree, setDiagnostics]);
 
   const requestDeleteNode = useCallback((node: ProjectNode) => {
     if (node.path === project?.rootFile) {
@@ -507,6 +557,12 @@ export default function Workspace() {
   return (
     <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden">
       <QuickOpen isOpen={isQuickOpen} onClose={() => setIsQuickOpen(false)} />
+      <WritingAssistant
+        selection={assistantSelection}
+        activeFileName={activeFile}
+        onApply={applyAssistantSuggestion}
+        onReplaceDocument={replaceActiveDocumentFromDraft}
+      />
       {/* Top Application Bar */}
       <header className="quire-workspace-header h-14 border-b border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_92%,transparent)] backdrop-blur-xl flex items-center justify-between px-4 sm:px-5 shrink-0 transition-colors duration-200 ease-out shadow-[0_1px_0_rgba(20,20,20,.02)]">
         <div className="flex items-center gap-3.5 min-w-0">
@@ -545,8 +601,6 @@ export default function Workspace() {
             </div>
           </label>
 
-          <WritingAssistant selection={assistantSelection} onApply={applyAssistantSuggestion} />
-          
           {/* Recompile Button */}
           <button 
             className="flex items-center gap-1.5 px-3.5 py-2 text-[11px] font-semibold bg-[var(--quire-red)] text-white rounded-[9px] hover:brightness-95 transition-all duration-150 ease-out min-w-[96px] justify-center shadow-[0_5px_14px_rgba(255,0,0,.2)] disabled:opacity-60"
@@ -710,6 +764,10 @@ export default function Workspace() {
               <div className="px-3.5 border-b border-[var(--quire-border)] text-[10px] font-semibold tracking-[.1em] uppercase text-[var(--quire-muted)] flex justify-between items-center h-10">
                 <span>Files</span>
                 <div className="flex items-center gap-0.5">
+                  <input ref={uploadInputRef} type="file" className="sr-only" onChange={(event) => void uploadAsset(event.target.files?.[0])} />
+                  <button type="button" title="Upload a file" aria-label="Upload a file" disabled={isUploading} onClick={() => uploadInputRef.current?.click()} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out disabled:cursor-wait disabled:opacity-50">
+                    <Upload className={`w-3.5 h-3.5 ${isUploading ? "animate-pulse" : ""}`} />
+                  </button>
                   <button type="button" title="New file (⌘N)" aria-label="Create a new file" onClick={() => { setNewFileError(""); setShowNewFile(true); }} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
                     <FilePlus className="w-3.5 h-3.5" />
                   </button>
@@ -724,7 +782,7 @@ export default function Workspace() {
               <div className="p-2.5 overflow-auto">
                 <ProjectTree 
                   nodes={tree} 
-                  selectedPath={activeFile || ""} 
+                  selectedPath={previewedAsset?.path || activeFile || ""}
                   onSelect={handleSelectFile} 
                   onDelete={requestDeleteNode}
                   onSetMainDocument={setMainDocument}
@@ -760,7 +818,7 @@ export default function Workspace() {
                           ? 'bg-[var(--quire-surface)] text-[var(--quire-text)] font-medium' 
                           : 'bg-transparent text-[var(--quire-muted)] hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text-secondary)]'
                         }`}
-                      onClick={() => setActiveFile(file)}
+                      onClick={() => { setPreviewedAsset(null); setActiveFile(file); }}
                     >
                       <span className="truncate max-w-[120px]">{file.split('/').pop()}</span>
                       {isDirty[file] && <span className={`w-1.5 h-1.5 rounded-full ${activeFile === file ? 'bg-[var(--quire-red)]' : 'bg-[var(--quire-muted)]'} shrink-0`}></span>}
@@ -775,7 +833,18 @@ export default function Workspace() {
                 )}
               </div> {/* Editor Content */}
               <div className="flex-1 overflow-hidden">
-                {activeFile ? (
+                {previewedAsset?.kind === "image" ? (
+                  <div className="flex h-full flex-col items-center justify-center overflow-auto bg-[var(--quire-surface-secondary)] p-8">
+                    <div className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-[0.08em] text-[var(--quire-muted)]"><ImageIcon className="h-4 w-4" /> IMAGE ASSET</div>
+                    <img src={`/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}`} alt={previewedAsset.path.split("/").pop() || "Uploaded image"} className="max-h-[calc(100vh-15rem)] max-w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] object-contain shadow-[0_16px_40px_rgba(0,0,0,.12)]" />
+                    <p className="mt-4 text-sm text-[var(--quire-muted)]">{previewedAsset.path}</p>
+                  </div>
+                ) : previewedAsset?.kind === "pdf" ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--quire-surface-secondary)] p-8 text-center">
+                    <div className="grid h-12 w-12 place-items-center rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] text-[var(--quire-red)] shadow-sm"><FileText className="h-6 w-6" /></div>
+                    <div><p className="text-sm font-semibold">{previewedAsset.path.split("/").pop()}</p><p className="mt-1 max-w-xs text-sm leading-6 text-[var(--quire-muted)]">This PDF is open in the preview panel. Use its page controls and zoom to read it here.</p></div>
+                  </div>
+                ) : activeFile ? (
                   <Editor 
                     value={fileContents[activeFile] || ""} 
                     onChange={handleEditorChange} 
@@ -806,8 +875,9 @@ export default function Workspace() {
           {/* PDF Preview */}
           <Panel defaultSize={40} minSize={20}>
             <PDFViewer 
-              url={`/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
-              onDownload={() => void downloadPdf()}
+              url={previewedAsset?.kind === "pdf" ? `/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}` : `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
+              documentName={previewedAsset?.kind === "pdf" ? previewedAsset.path.split("/").pop() : undefined}
+              onDownload={previewedAsset?.kind === "pdf" ? undefined : () => void downloadPdf()}
             />
           </Panel>
         </PanelGroup>

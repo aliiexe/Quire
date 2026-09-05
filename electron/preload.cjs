@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("quireDesktop", {
   setWindowAppearance: (appearance) => ipcRenderer.invoke("quire:set-window-appearance", appearance),
   getAiSettings: (input) => ipcRenderer.invoke("quire:get-ai-settings", input),
   saveAiSettings: (input) => ipcRenderer.invoke("quire:save-ai-settings", input),
+  listAiModels: (input) => ipcRenderer.invoke("quire:list-ai-models", input),
   assistWriting: (input) => ipcRenderer.invoke("quire:assist-writing", input),
   savePdf: (input) => ipcRenderer.invoke("quire:save-pdf", input),
   trashProjectItem: (input) => ipcRenderer.invoke("quire:trash-project-item", input),

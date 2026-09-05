@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { storage } from "@/lib/projects/local-storage";
 import { z } from "zod";
+import path from "path";
 
 function getErrorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -81,6 +82,36 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const upload = formData.get("file");
+      if (!(upload instanceof File) || upload.size === 0) {
+        return NextResponse.json({ error: "Choose a file to upload" }, { status: 400 });
+      }
+      if (upload.size > 25 * 1024 * 1024) {
+        return NextResponse.json({ error: "Uploads must be 25 MB or smaller" }, { status: 413 });
+      }
+
+      const filename = path.basename(upload.name).trim();
+      const parsedPath = projectPathSchema.safeParse(`assets/${filename}`);
+      if (!parsedPath.success) {
+        return NextResponse.json({ error: "That file name cannot be used in this project" }, { status: 400 });
+      }
+
+      const projectId = (await params).projectId;
+      try {
+        await storage.readBinaryFile(projectId, parsedPath.data);
+        return NextResponse.json({ error: "A file with that name already exists in assets" }, { status: 409 });
+      } catch (error: unknown) {
+        const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
+        if (code !== "ENOENT") throw error;
+      }
+
+      await storage.writeBinaryFile(projectId, parsedPath.data, new Uint8Array(await upload.arrayBuffer()));
+      return NextResponse.json({ success: true, path: parsedPath.data, name: filename }, { status: 201 });
+    }
+
     const result = createItemSchema.safeParse(await request.json());
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0]?.message || "Invalid project path" }, { status: 400 });

@@ -15,9 +15,21 @@ let isFirstLaunch = false;
 let workspaceMenuState = { autoSave: true, autoCompile: true };
 const onboardingWindowSize = { width: 1100, height: 800, minWidth: 960, minHeight: 700 };
 const AI_PROVIDERS = {
-  openai: { label: "OpenAI", defaultModel: "gpt-5-mini" },
-  anthropic: { label: "Anthropic", defaultModel: "claude-sonnet-5" },
-  openrouter: { label: "OpenRouter", defaultModel: "openrouter/free" },
+  openrouter: { label: "OpenRouter", defaultModel: "openrouter/free", protocol: "openai-compatible", baseUrl: "https://openrouter.ai/api/v1" },
+  openai: { label: "OpenAI", defaultModel: "gpt-5-mini", protocol: "openai" },
+  anthropic: { label: "Anthropic (Claude)", defaultModel: "claude-sonnet-5", protocol: "anthropic" },
+  google: { label: "Google Gemini", defaultModel: "gemini-3.7-flash", protocol: "gemini" },
+  groq: { label: "Groq", defaultModel: "openai/gpt-oss-120b", protocol: "openai-compatible", baseUrl: "https://api.groq.com/openai/v1" },
+  deepseek: { label: "DeepSeek", defaultModel: "deepseek-v4-flash", protocol: "openai-compatible", baseUrl: "https://api.deepseek.com" },
+  mistral: { label: "Mistral AI", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.mistral.ai/v1" },
+  xai: { label: "xAI", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.x.ai/v1" },
+  cohere: { label: "Cohere", defaultModel: "command-a-03-2025", protocol: "cohere" },
+  perplexity: { label: "Perplexity", defaultModel: "sonar", protocol: "perplexity" },
+  together: { label: "Together AI", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.together.xyz/v1" },
+  fireworks: { label: "Fireworks AI", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.fireworks.ai/inference/v1" },
+  cerebras: { label: "Cerebras", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.cerebras.ai/v1" },
+  sambanova: { label: "SambaNova", defaultModel: "", protocol: "openai-compatible", baseUrl: "https://api.sambanova.ai/v1" },
+  custom: { label: "Custom OpenAI-compatible API", defaultModel: "", protocol: "openai-compatible" },
 };
 const DEFAULT_AI_PROVIDER = "openrouter";
 
@@ -144,7 +156,28 @@ function defaultAiModel(provider) {
 function normalizeAiModel(model, provider) {
   if (typeof model !== "string") return defaultAiModel(provider);
   const trimmed = model.trim();
-  return /^[a-zA-Z0-9._~:/-]{1,180}$/.test(trimmed) ? trimmed : defaultAiModel(provider);
+  return trimmed && /^[a-zA-Z0-9._~:/-]{1,180}$/.test(trimmed) ? trimmed : defaultAiModel(provider);
+}
+
+function normalizeCustomAiEndpoint(endpoint) {
+  if (typeof endpoint !== "string" || !endpoint.trim()) return "";
+  try {
+    const url = new URL(endpoint.trim());
+    if (url.protocol !== "https:") return "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function aiProviderBaseUrl(preferences) {
+  const provider = AI_PROVIDERS[preferences.provider];
+  if (preferences.provider === "custom") {
+    const customEndpoint = normalizeCustomAiEndpoint(preferences.customEndpoint);
+    if (!customEndpoint) throw new Error("Add a secure OpenAI-compatible API base URL in Settings before using this provider.");
+    return customEndpoint;
+  }
+  return provider.baseUrl || "";
 }
 
 function encryptedKeysFromPreferences(preferences) {
@@ -157,7 +190,7 @@ function encryptedKeysFromPreferences(preferences) {
     }
   }
 
-  // AI Assistant originally supported OpenAI alone. Preserve an existing
+  // Quire Draft originally supported OpenAI alone. Preserve an existing
   // local key as the user moves to the provider-neutral settings format.
   if (!encryptedApiKeys.openai && typeof preferences?.encryptedApiKey === "string") {
     encryptedApiKeys.openai = preferences.encryptedApiKey;
@@ -176,17 +209,18 @@ async function readAiAssistantPreferences() {
       provider,
       model: normalizeAiModel(preferences?.model, provider),
       encryptedApiKeys,
+      customEndpoint: normalizeCustomAiEndpoint(preferences?.customEndpoint),
     };
   } catch (error) {
-    if (error?.code === "ENOENT") return { provider: DEFAULT_AI_PROVIDER, model: defaultAiModel(DEFAULT_AI_PROVIDER), encryptedApiKeys: {} };
-    throw new Error("Quire could not read the AI Assistant settings.");
+    if (error?.code === "ENOENT") return { provider: DEFAULT_AI_PROVIDER, model: defaultAiModel(DEFAULT_AI_PROVIDER), encryptedApiKeys: {}, customEndpoint: "" };
+    throw new Error("Quire could not read the Quire Draft settings.");
   }
 }
 
 function getAiAssistantKey(preferences) {
   const encryptedApiKey = preferences.encryptedApiKeys[preferences.provider];
   const providerLabel = AI_PROVIDERS[preferences.provider].label;
-  if (!encryptedApiKey) throw new Error(`Add your ${providerLabel} API key in Settings before using the AI Assistant.`);
+  if (!encryptedApiKey) throw new Error(`Add your ${providerLabel} API key in Settings before using Quire Draft.`);
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error("macOS Keychain is not available, so Quire cannot securely use an AI API key.");
   }
@@ -204,11 +238,25 @@ function writingAssistantInstructions(mode) {
     correct: "Correct grammar, punctuation, spelling, and clear language issues while preserving the writer's meaning and voice.",
     shorten: "Make the passage more concise while preserving its important meaning and voice.",
     explain: "Give concise editorial feedback about clarity, grammar, and structure. Do not rewrite the passage.",
+    draft: "Create a complete, compile-ready LaTeX document from the writer's brief. Use the document type the writer asks for, or a conventional article when they do not specify one.",
   }[mode];
 
-  if (!task) throw new Error("Choose a valid AI Assistant action.");
+  if (!task) throw new Error("Choose a valid Quire Draft action.");
 
-  return `You are Quire's writing assistant. ${task}
+  if (mode === "draft") {
+    return `You are Quire Draft, a careful writing partner inside a local LaTeX editor. ${task}
+
+Follow these principles:
+- Build original writing from the brief. Do not imitate a named author or reproduce text from a source.
+- Do not invent quotations, sources, citations, data, statistics, or factual claims. When a brief needs evidence, use clearly marked placeholders instead.
+- Do not help disguise copied work or evade academic-integrity or AI-detection systems.
+- Keep the document useful, specific, and recognizably human rather than generic.
+- Work only from the writer's deliberate brief.
+
+Return only complete LaTeX source, beginning with \\documentclass and ending with \\end{document}. Do not add Markdown fences, a preface, or explanation.`;
+  }
+
+  return `You are Quire Draft, a careful writing partner inside a local LaTeX editor. ${task}
 
 Follow these principles:
 - Keep the writing recognizably human and specific to the writer; do not flatten it into generic prose.
@@ -223,21 +271,83 @@ ${mode === "explain"
   : "Return only the complete revised passage. Do not add a preface, explanation, quotation marks, or Markdown."}`;
 }
 
+function extractChatCompletionText(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.filter((part) => typeof part?.text === "string").map((part) => part.text).join("\n");
+  return "";
+}
+
+function normalizeModelCatalog(entries) {
+  if (!Array.isArray(entries)) return [];
+  const unique = new Map();
+  for (const entry of entries) {
+    const rawId = typeof entry === "string" ? entry : entry?.id || entry?.name;
+    const id = typeof rawId === "string" ? rawId.replace(/^models\//, "").trim() : "";
+    if (!id || !/^[a-zA-Z0-9._~:/-]{1,180}$/.test(id)) continue;
+    const displayName = typeof entry === "object" && typeof entry?.display_name === "string"
+      ? entry.display_name
+      : typeof entry === "object" && typeof entry?.displayName === "string"
+        ? entry.displayName
+        : id;
+    unique.set(id, { id, label: displayName === id ? id : `${displayName} — ${id}` });
+  }
+  return [...unique.values()].sort((a, b) => a.label.localeCompare(b.label)).slice(0, 100);
+}
+
+async function listAiModels({ provider: requestedProvider, apiKey: suppliedApiKey, customEndpoint }) {
+  const saved = await readAiAssistantPreferences();
+  const provider = normalizeAiProvider(requestedProvider, saved.provider);
+  const preferences = {
+    ...saved,
+    provider,
+    customEndpoint: normalizeCustomAiEndpoint(customEndpoint) || saved.customEndpoint,
+  };
+  const apiKey = typeof suppliedApiKey === "string" && suppliedApiKey.trim()
+    ? suppliedApiKey.trim()
+    : getAiAssistantKey(preferences);
+  const definition = AI_PROVIDERS[provider];
+  let response;
+
+  if (definition.protocol === "anthropic") {
+    response = await fetch("https://api.anthropic.com/v1/models?limit=100", {
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    });
+  } else if (definition.protocol === "gemini") {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  } else if (definition.protocol === "cohere") {
+    response = await fetch("https://api.cohere.com/v2/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+  } else if (definition.protocol === "perplexity") {
+    response = await fetch("https://api.perplexity.ai/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+  } else if (definition.protocol === "openai") {
+    response = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
+  } else {
+    response = await fetch(`${aiProviderBaseUrl(preferences)}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Could not load models from ${definition.label}.`);
+  return { models: normalizeModelCatalog(payload?.data || payload?.models) };
+}
+
 async function requestWritingAssistance({ selection, mode }) {
   if (typeof selection !== "string" || !selection.trim()) {
-    throw new Error("Select the passage you want help with first.");
+    throw new Error(mode === "draft" ? "Describe the document you want Quire Draft to create." : "Select the passage you want help with first.");
   }
   if (selection.length > 18000) {
     throw new Error("Select a shorter passage (up to 18,000 characters) for one AI request.");
   }
 
   const preferences = await readAiAssistantPreferences();
+  if (!preferences.model) throw new Error("Choose a model in Settings before using Quire Draft.");
   const apiKey = getAiAssistantKey(preferences);
   const instructions = writingAssistantInstructions(mode);
+  const provider = AI_PROVIDERS[preferences.provider];
+  const maxOutputTokens = mode === "draft" ? 4000 : 900;
   let response;
   let extractOutput;
 
-  if (preferences.provider === "anthropic") {
+  if (provider.protocol === "anthropic") {
     response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -247,7 +357,7 @@ async function requestWritingAssistance({ selection, mode }) {
       },
       body: JSON.stringify({
         model: preferences.model,
-        max_tokens: 900,
+        max_tokens: maxOutputTokens,
         system: instructions,
         messages: [{ role: "user", content: selection }],
       }),
@@ -256,16 +366,27 @@ async function requestWritingAssistance({ selection, mode }) {
       ?.filter((part) => part?.type === "text" && typeof part.text === "string")
       .map((part) => part.text)
       .join("\n");
-  } else if (preferences.provider === "openrouter") {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  } else if (provider.protocol === "gemini") {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(preferences.model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: instructions }] },
+        contents: [{ role: "user", parts: [{ text: selection }] }],
+        generationConfig: { maxOutputTokens },
+      }),
+    });
+    extractOutput = (payload) => payload?.candidates?.[0]?.content?.parts
+      ?.filter((part) => typeof part?.text === "string")
+      .map((part) => part.text)
+      .join("\n");
+  } else if (provider.protocol === "cohere") {
+    response = await fetch("https://api.cohere.com/v2/chat", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: preferences.model,
-        max_tokens: 900,
+        max_tokens: maxOutputTokens,
         messages: [
           { role: "system", content: instructions },
           { role: "user", content: selection },
@@ -273,37 +394,61 @@ async function requestWritingAssistance({ selection, mode }) {
       }),
     });
     extractOutput = (payload) => {
-      const content = payload?.choices?.[0]?.message?.content;
+      const content = payload?.message?.content;
       if (typeof content === "string") return content;
       if (Array.isArray(content)) return content.filter((part) => typeof part?.text === "string").map((part) => part.text).join("\n");
       return "";
     };
-  } else {
+  } else if (provider.protocol === "perplexity") {
+    response = await fetch("https://api.perplexity.ai/v1/sonar", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: preferences.model,
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: selection },
+        ],
+      }),
+    });
+    extractOutput = extractChatCompletionText;
+  } else if (provider.protocol === "openai") {
     response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: preferences.model,
-      store: false,
-      max_output_tokens: 900,
-      instructions,
-      input: selection,
-    }),
-  });
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: preferences.model,
+        store: false,
+        max_output_tokens: maxOutputTokens,
+        instructions,
+        input: selection,
+      }),
+    });
     extractOutput = (payload) => payload?.output_text;
+  } else {
+    response = await fetch(`${aiProviderBaseUrl(preferences)}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: preferences.model,
+        max_tokens: maxOutputTokens,
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: selection },
+        ],
+      }),
+    });
+    extractOutput = extractChatCompletionText;
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error?.message || "The AI Assistant could not complete that request.");
+    throw new Error(payload?.error?.message || payload?.message || "Quire Draft could not complete that request.");
   }
 
   const rawOutput = extractOutput(payload);
   const output = typeof rawOutput === "string" ? rawOutput.trim() : "";
-  if (!output) throw new Error("The AI Assistant returned an empty response. Try again.");
+  if (!output) throw new Error("Quire Draft returned an empty response. Try again.");
   return { output };
 }
 
@@ -571,6 +716,7 @@ app.whenReady().then(async () => {
       providerLabel: AI_PROVIDERS[provider].label,
       model: provider === preferences.provider ? preferences.model : defaultAiModel(provider),
       keyConfigured: Boolean(preferences.encryptedApiKeys[provider]),
+      customEndpoint: provider === "custom" ? preferences.customEndpoint : "",
     };
   });
 
@@ -579,6 +725,13 @@ app.whenReady().then(async () => {
     const provider = normalizeAiProvider(input?.provider, current.provider);
     const model = normalizeAiModel(input?.model, provider);
     const encryptedApiKeys = { ...current.encryptedApiKeys };
+    const customEndpoint = provider === "custom"
+      ? normalizeCustomAiEndpoint(input?.customEndpoint)
+      : current.customEndpoint;
+
+    if (provider === "custom" && !customEndpoint) {
+      throw new Error("Enter a secure OpenAI-compatible API base URL for the custom provider.");
+    }
 
     if (input?.removeApiKey === true) {
       delete encryptedApiKeys[provider];
@@ -590,15 +743,17 @@ app.whenReady().then(async () => {
     }
 
     await fs.mkdir(app.getPath("userData"), { recursive: true });
-    await fs.writeFile(getAiAssistantPreferencesPath(), JSON.stringify({ provider, model, encryptedApiKeys }, null, 2));
+    await fs.writeFile(getAiAssistantPreferencesPath(), JSON.stringify({ provider, model, encryptedApiKeys, customEndpoint }, null, 2));
     return {
       provider,
       providerLabel: AI_PROVIDERS[provider].label,
       model,
       keyConfigured: Boolean(encryptedApiKeys[provider]),
+      customEndpoint: provider === "custom" ? customEndpoint : "",
     };
   });
 
+  ipcMain.handle("quire:list-ai-models", async (_event, input) => listAiModels(input || {}));
   ipcMain.handle("quire:assist-writing", async (_event, input) => requestWritingAssistance(input || {}));
 
   ipcMain.on("quire:set-menu-state", (_event, state) => {

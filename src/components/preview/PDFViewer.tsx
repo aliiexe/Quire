@@ -9,6 +9,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 interface PDFViewerProps {
   url: string | null;
   onDownload?: () => void;
+  documentName?: string;
 }
 
 interface PageDimensions {
@@ -21,7 +22,7 @@ interface PdfRenderTask {
   cancel: () => void;
 }
 
-export function PDFViewer({ url, onDownload }: PDFViewerProps) {
+export function PDFViewer({ url, onDownload, documentName }: PDFViewerProps) {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
       } catch (error) {
         if (cancelled) return;
         console.error("Error loading PDF:", error);
-        setLoadError("No PDF is available yet. Compile this project to create a preview.");
+        setLoadError(documentName ? `Quire could not read “${documentName}”.` : "No PDF is available yet. Compile this project to create a preview.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -173,9 +174,11 @@ export function PDFViewer({ url, onDownload }: PDFViewerProps) {
             <span className="hidden lg:inline text-[11px] font-medium">Fit width</span>
           </button>
           <div className="w-px h-3 bg-[var(--quire-border)] mx-1" />
-          <button onClick={onDownload} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Download PDF">
-            <Download className="w-4 h-4" />
-          </button>
+          {onDownload && <><div className="w-px h-3 bg-[var(--quire-border)] mx-1" />
+            <button onClick={onDownload} className="p-1 rounded-sm hover:text-[var(--quire-text)] hover:bg-[var(--quire-hover)] transition-all duration-150 ease-out" title="Download PDF">
+              <Download className="w-4 h-4" />
+            </button>
+          </>}
         </div>
       </div>
       

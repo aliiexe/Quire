@@ -43,7 +43,9 @@ export interface ProjectStorage {
   updateProject(projectId: string, updates: Partial<Omit<Project, "id">>): Promise<Project>;
   listTree(projectId: string): Promise<ProjectNode[]>;
   readFile(projectId: string, path: string): Promise<FileContent>;
+  readBinaryFile(projectId: string, path: string): Promise<Uint8Array>;
   writeFile(projectId: string, path: string, content: string): Promise<void>;
+  writeBinaryFile(projectId: string, path: string, content: Uint8Array): Promise<void>;
   createFile(projectId: string, path: string): Promise<void>;
   createDirectory(projectId: string, path: string): Promise<void>;
   rename(projectId: string, from: string, to: string): Promise<void>;

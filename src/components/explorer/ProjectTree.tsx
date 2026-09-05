@@ -20,8 +20,9 @@ export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMain
   if (!nodes || nodes.length === 0) return null;
 
   const getFileIcon = (filename: string) => {
-    if (filename.endsWith('.tex') || filename.endsWith('.sty') || filename.endsWith('.cls')) return <FileText className="w-3.5 h-3.5" />;
-    if (filename.endsWith('.png') || filename.endsWith('.jpg')) return <ImageIcon className="w-3.5 h-3.5" />;
+    const extension = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+    if ([".tex", ".sty", ".cls", ".pdf"].includes(extension)) return <FileText className="w-3.5 h-3.5" />;
+    if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"].includes(extension)) return <ImageIcon className="w-3.5 h-3.5" />;
     return <File className="w-3.5 h-3.5" />;
   };
 

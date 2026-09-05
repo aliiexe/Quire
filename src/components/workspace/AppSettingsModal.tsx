@@ -280,7 +280,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
       setKeyConfigured(settings.keyConfigured);
       setCustomEndpoint(settings.customEndpoint);
       setApiKey("");
-      setNotice(settings.keyConfigured ? "Quire Draft is ready on this Mac." : "Model preference saved. Add an API key to use Quire Draft.");
+      setNotice(settings.keyConfigured ? "Quire Draft is ready on this computer." : "Model preference saved. Add an API key to use Quire Draft.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save Quire Draft settings.");
     } finally {
@@ -298,7 +298,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
       const settings = await bridge.saveAiSettings({ provider, model, customEndpoint, removeApiKey: true });
       setKeyConfigured(settings.keyConfigured);
       setApiKey("");
-      setNotice("The saved API key was removed from this Mac.");
+      setNotice("The saved API key was removed from this computer.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not remove the API key.");
     } finally {
@@ -359,7 +359,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                 <div className="grid gap-2 sm:grid-cols-3">
                   {(["system", "light", "dark"] as const).map((option) => {
                     const Icon = option === "system" ? Monitor : option === "light" ? Sun : Moon;
-                    return <button key={option} type="button" onClick={() => onAppearanceChange(option)} className={`rounded-xl border p-4 text-left transition-all ${appearance === option ? "border-[var(--quire-red)] bg-[var(--quire-red-soft)] shadow-sm" : "border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] hover:border-[var(--quire-muted)]"}`}><Icon className="h-5 w-5" /><div className="mt-7 text-sm font-semibold capitalize">{option === "system" ? "Match my Mac" : option}</div><div className="mt-1 text-xs text-[var(--quire-muted)]">{option === "system" ? "Follow macOS" : option === "light" ? "Warm and clear" : "Quiet and focused"}</div></button>;
+                    return <button key={option} type="button" onClick={() => onAppearanceChange(option)} className={`rounded-xl border p-4 text-left transition-all ${appearance === option ? "border-[var(--quire-red)] bg-[var(--quire-red-soft)] shadow-sm" : "border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] hover:border-[var(--quire-muted)]"}`}><Icon className="h-5 w-5" /><div className="mt-7 text-sm font-semibold capitalize">{option === "system" ? "Match this computer" : option}</div><div className="mt-1 text-xs text-[var(--quire-muted)]">{option === "system" ? "Follow system appearance" : option === "light" ? "Warm and clear" : "Quiet and focused"}</div></button>;
                   })}
                 </div>
               </div>
@@ -372,7 +372,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                 </div>
 
                 <div className="rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
-                  <div className="flex gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" /><p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Private by default.</strong> Your key is encrypted with macOS Keychain and never shown again. The selected text goes directly to the provider when you choose an action; its data policies apply.</p></div>
+                  <div className="flex gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" /><p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Private by default.</strong> Your key is encrypted with your system&apos;s secure credential storage and never shown again. The selected text goes directly to the provider when you choose an action; its data policies apply.</p></div>
                 </div>
 
                 {loading ? <div className="flex items-center gap-2 py-8 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Loading Quire Draft settings…</div> : <>

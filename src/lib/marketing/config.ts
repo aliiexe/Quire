@@ -13,7 +13,7 @@ export const pricingTiers = [
     price: "Free forever",
     description: "Everything you need to write and compile locally, free and open source.",
     features: ["Local-first architecture", "Open source", "Unlimited local projects", "Core LaTeX packages"],
-    cta: "Download for macOS",
+    cta: "Download Quire",
     href: "https://github.com/aliiexe/Quire/releases",
   },
 ];

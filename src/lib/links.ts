@@ -1,5 +1,8 @@
 export const QUIRE_REPOSITORY_URL = "https://github.com/aliiexe/Quire";
-export const QUIRE_MAC_DOWNLOAD_URL = `${QUIRE_REPOSITORY_URL}/releases`;
+export const QUIRE_DOWNLOADS_URL = `${QUIRE_REPOSITORY_URL}/releases`;
+// Kept as an alias so older links continue to resolve while the site points
+// everyone to the platform-specific installers on the Releases page.
+export const QUIRE_MAC_DOWNLOAD_URL = QUIRE_DOWNLOADS_URL;
 
 const configuredWebsiteUrl = process.env.NEXT_PUBLIC_QUIRE_WEBSITE_URL?.trim().replace(/\/$/, "");
 

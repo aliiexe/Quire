@@ -1,7 +1,7 @@
 {
   "name": "quire",
-  "version": "0.2.6",
-  "description": "A calm, local-first macOS workspace for writing and compiling LaTeX.",
+  "version": "0.3.0",
+  "description": "A calm, local-first desktop workspace for writing and compiling LaTeX.",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
@@ -11,6 +11,7 @@
     "desktop:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && electron .\"",
     "build:dmg-background": "node scripts/build-dmg-background.cjs",
     "desktop:build": "npm run build && npm run build:dmg-background && electron-builder --mac dmg --arm64 --x64",
+    "desktop:build:win": "npm run build && electron-builder --win nsis --x64",
     "lint": "eslint",
     "doctor": "npx tsx scripts/doctor.ts"
   },
@@ -45,6 +46,24 @@
       "target": [
         "dmg"
       ]
+    },
+    "win": {
+      "icon": "public/brand/quire-mark-dark.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Quire"
     },
     "dmg": {
       "title": "Quire ${version}",

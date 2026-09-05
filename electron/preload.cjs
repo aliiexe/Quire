@@ -15,6 +15,7 @@ window.addEventListener("DOMContentLoaded", () => {
 contextBridge.exposeInMainWorld("quireDesktop", {
   chooseWorkspace: () => ipcRenderer.invoke("quire:choose-workspace"),
   getLaunchState: () => ipcRenderer.invoke("quire:get-launch-state"),
+  getCompilerStatus: () => ipcRenderer.invoke("quire:get-compiler-status"),
   enterOnboarding: () => ipcRenderer.invoke("quire:enter-onboarding"),
   completeOnboarding: () => ipcRenderer.invoke("quire:complete-onboarding"),
   setWindowAppearance: (appearance) => ipcRenderer.invoke("quire:set-window-appearance", appearance),

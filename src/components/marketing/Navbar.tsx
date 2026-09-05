@@ -5,7 +5,7 @@ import Image from "next/image";
 import { MouseEvent, useEffect, useState } from "react";
 import { ArrowUpRight, Download, Menu, Moon, Sun, X } from "lucide-react";
 import { useSmoothScroll } from "./SmoothScroll";
-import { QUIRE_MAC_DOWNLOAD_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -71,7 +71,7 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <a href={QUIRE_MAC_DOWNLOAD_URL} className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`}>Download macOS</a>
+          <a href={QUIRE_DOWNLOADS_URL} className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`}>Download Quire</a>
           <button
             type="button"
             className="mk-nav__menu-toggle"
@@ -95,7 +95,7 @@ export function Navbar() {
         </div>
         <div className="mk-nav__mobile-footer">
           <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={() => setMobileMenuOpen(false)}>GitHub <ArrowUpRight size={15} /></a>
-          <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)}>Download macOS <Download size={16} /></a>
+          <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)}>Download Quire <Download size={16} /></a>
         </div>
       </nav>
     </header>

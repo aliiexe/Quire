@@ -1,5 +1,5 @@
 import { Download } from "lucide-react";
-import { QUIRE_MAC_DOWNLOAD_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
 
 export function FinalCTA() {
   return (
@@ -7,13 +7,13 @@ export function FinalCTA() {
       <div className="mk-grid relative z-10">
         <p className="mk-eyebrow">A better home for LaTeX</p>
         <h2 className="mk-display">Your next document<br />starts here.</h2>
-        <p>Download the macOS app for a calmer place to write, compile, and see the work as it takes shape.</p>
+        <p>Download Quire for macOS or Windows—a calmer place to write, compile, and see the work as it takes shape.</p>
         <div className="mk-final__actions">
-          <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--light">Download for macOS <Download size={16} /></a>
+          <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--light">Download Quire <Download size={16} /></a>
           <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-button mk-button--ghost">GitHub ↗</a>
         </div>
         <p className="mt-5 max-w-xl text-sm leading-6 text-white/70">
-          Free, open-source macOS preview. This independent release is not yet Apple-notarized. If macOS blocks the first launch after you move Quire to Applications, open <strong className="font-semibold text-white">System Settings → Privacy &amp; Security → Open Anyway</strong>.
+          Free, open-source desktop preview. The macOS build is not yet Apple-notarized; if macOS blocks its first launch, use <strong className="font-semibold text-white">System Settings → Privacy &amp; Security → Open Anyway</strong>. Windows may show Microsoft Defender SmartScreen until Quire is code-signed.
         </p>
       </div>
     </section>

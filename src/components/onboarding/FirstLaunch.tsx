@@ -292,7 +292,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
                 {([
                   ["light", "Light", "Warm and clear", Sun],
                   ["dark", "Dark", "Quiet and focused", Moon],
-                  ["system", "Match my Mac", "Always in step", Monitor],
+                  ["system", "Match this computer", "Always in step", Monitor],
                 ] as const).map(([id, title, description, Icon]) => (
                   <button
                     key={id}
@@ -309,7 +309,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
                 ))}
               </div>
               <div className="quire-onboarding__actions">
-                <span>We recommend matching your Mac.</span>
+                <span>We recommend matching your computer.</span>
                 <button type="button" className="quire-onboarding__primary" onClick={() => moveTo("workspace")}>Continue <ArrowRight size={16} /></button>
               </div>
             </>
@@ -319,7 +319,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
             <>
               <div className="quire-onboarding__eyebrow"><FolderHeart size={14} /> Your writing, your place</div>
               <h1>Choose where your work lives.</h1>
-              <p>Quire projects are plain files. They stay on your Mac, ready whenever you are.</p>
+              <p>Quire projects are plain files. They stay on your computer, ready whenever you are.</p>
               <div className="quire-onboarding__workspace-options">
                 <button type="button" className={`quire-onboarding__workspace-card ${workspace === "documents" ? "is-selected" : ""}`} onClick={() => setWorkspace("documents")}>
                   <span className="quire-onboarding__folder-icon"><FolderHeart size={22} /></span>
@@ -333,7 +333,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
                   disabled={!isDesktop || isChoosingFolder}
                 >
                   <span className="quire-onboarding__folder-icon"><Laptop size={22} /></span>
-                  <span><strong>{isChoosingFolder ? "Opening Finder…" : "Choose a folder"}</strong><small>{isDesktop ? "Pick a home from anywhere on your Mac." : "Available in the downloaded Mac app."}</small></span>
+                  <span><strong>{isChoosingFolder ? "Opening folder picker…" : "Choose a folder"}</strong><small>{isDesktop ? "Pick a home from anywhere on your computer." : "Available in the downloaded desktop app."}</small></span>
                   {workspace === "custom" ? <Check size={18} /> : <ArrowRight size={18} />}
                 </button>
               </div>

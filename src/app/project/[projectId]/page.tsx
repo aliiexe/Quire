@@ -886,7 +886,7 @@ export default function Workspace() {
         open={Boolean(nodePendingDeletion)}
         onOpenChange={(open) => { if (!open) setNodePendingDeletion(null); }}
         title={nodePendingDeletion ? `Move “${nodePendingDeletion.name}” to the Trash?` : "Move this item to the Trash?"}
-        description={nodePendingDeletion?.type === "directory" ? "This folder and everything inside it will be moved to the macOS Trash. You can restore it from there if needed." : "This file will be moved to the macOS Trash. You can restore it from there if needed."}
+        description={nodePendingDeletion?.type === "directory" ? "This folder and everything inside it will be moved to the Trash or Recycle Bin. You can restore it from there if needed." : "This file will be moved to the Trash or Recycle Bin. You can restore it from there if needed."}
         confirmLabel="Move to Trash"
         onConfirm={() => void deleteNode()}
       />

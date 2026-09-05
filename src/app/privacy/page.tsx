@@ -5,7 +5,7 @@ import { QuireWordmark } from "@/components/brand/logo";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Quire",
-  description: "Quire's privacy policy for its local-first macOS app.",
+  description: "Quire's privacy policy for its local-first desktop app.",
 };
 
 const effectiveDate = "5 September 2026";
@@ -33,12 +33,12 @@ export default function PrivacyPolicyPage() {
           <div className="mt-12 space-y-10 text-[15px] leading-7 text-[var(--quire-text-secondary)] sm:text-base">
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">The short version</h2>
-              <p className="mt-3">Quire is a local-first macOS application. Your writing, project files, generated PDFs, and compiler output stay on your Mac in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app. Quire Draft is optional and off until you add your own API key and deliberately request help with selected text or a writing brief.</p>
+              <p className="mt-3">Quire is a local-first desktop application. Your writing, project files, generated PDFs, and compiler output stay on your computer in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app. Quire Draft is optional and off until you add your own API key and deliberately request help with selected text or a writing brief.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">What the app accesses</h2>
-              <p className="mt-3">Quire reads and writes files only within the local workspace you select or create, plus its local project settings and build output. It uses the TeX tools installed on your Mac to compile your documents. This processing happens on your device.</p>
+              <p className="mt-3">Quire reads and writes files only within the local workspace you select or create, plus its local project settings and build output. It uses the TeX tools installed on your computer to compile your documents. This processing happens on your device.</p>
             </section>
 
             <section>
@@ -48,23 +48,23 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">When a connection may happen</h2>
-              <p className="mt-3">Quire runs a local service on your own Mac to power its interface. It is not a hosted workspace. Links to the website, GitHub, documentation, or other external services open only when you choose them; those services have their own privacy practices.</p>
+              <p className="mt-3">Quire runs a local service on your own computer to power its interface. It is not a hosted workspace. Links to the website, GitHub, documentation, or other external services open only when you choose them; those services have their own privacy practices.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Optional Quire Draft</h2>
-              <p className="mt-3">Quire Draft is disabled by default. If you choose to configure it, you provide your own API key for the provider you select, including direct providers, OpenRouter, or a compatible endpoint. Quire encrypts each saved key using macOS Keychain and does not show it back to you. When you explicitly choose a Quire Draft action, Quire sends only the passage you selected or writing brief you entered, together with the requested action, to your selected provider. It does not automatically send an entire project, compile output, or other files.</p>
+              <p className="mt-3">Quire Draft is disabled by default. If you choose to configure it, you provide your own API key for the provider you select, including direct providers, OpenRouter, or a compatible endpoint. Quire encrypts each saved key using your operating system&apos;s secure credential storage and does not show it back to you. When you explicitly choose a Quire Draft action, Quire sends only the passage you selected or writing brief you entered, together with the requested action, to your selected provider. It does not automatically send an entire project, compile output, or other files.</p>
               <p className="mt-3">Your selected provider processes any text you send under your own account and its applicable terms and data policies. If you use OpenRouter, its routing may send that text to the model provider you choose. Quire cannot control any provider&apos;s services or policies. Do not send confidential, personal, or sensitive material unless you are comfortable with the chosen provider&apos;s handling of it.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Your files and choices</h2>
-              <p className="mt-3">You control your workspace and can inspect, copy, back up, export, or delete its files at any time. Removing an item from the desktop app moves it to macOS Trash. Your normal macOS backup, storage, and Trash settings determine how long local files remain on your device.</p>
+              <p className="mt-3">You control your workspace and can inspect, copy, back up, export, or delete its files at any time. Removing an item from the desktop app moves it to the operating system&apos;s Trash or Recycle Bin. Your normal backup, storage, and deletion settings determine how long local files remain on your device.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Security</h2>
-              <p className="mt-3">Keeping files on your device does not replace normal security practices. Protect your Mac account, keep backups of important work, and install updates from trusted sources. If you open external links or add third-party LaTeX packages, their security and privacy practices are separate from Quire.</p>
+              <p className="mt-3">Keeping files on your device does not replace normal security practices. Protect your computer account, keep backups of important work, and install updates from trusted sources. If you open external links or add third-party LaTeX packages, their security and privacy practices are separate from Quire.</p>
             </section>
 
             <section>

@@ -225,7 +225,7 @@ function getAiAssistantKey(preferences) {
   const providerLabel = AI_PROVIDERS[preferences.provider].label;
   if (!encryptedApiKey) throw new Error(`Add your ${providerLabel} API key in Settings before using Quire Draft.`);
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("macOS Keychain is not available, so Quire cannot securely use an AI API key.");
+    throw new Error("Secure system credential storage is not available, so Quire cannot securely use an AI API key.");
   }
 
   try {
@@ -470,7 +470,7 @@ async function markFirstLaunchComplete() {
   await fs.writeFile(getOnboardingPreferencesPath(), JSON.stringify({ completedAt: Date.now() }, null, 2));
 }
 
-function getMacWorkspacePath() {
+function getWorkspacePath() {
   if (process.env.QUIRE_WORKSPACE) return process.env.QUIRE_WORKSPACE;
 
   try {
@@ -485,18 +485,85 @@ function getMacWorkspacePath() {
   return path.join(app.getPath("documents"), "Quire");
 }
 
-async function saveMacWorkspacePath(workspacePath) {
+async function saveWorkspacePath(workspacePath) {
   await fs.mkdir(app.getPath("userData"), { recursive: true });
   await fs.writeFile(getWorkspacePreferencesPath(), JSON.stringify({ workspacePath }, null, 2));
 }
 
-function macPath() {
-  return [
-    "/Library/TeX/texbin",
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    process.env.PATH,
-  ].filter(Boolean).join(path.delimiter);
+function windowsLatexPaths() {
+  if (process.platform !== "win32") return [];
+
+  const programFiles = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"]].filter(Boolean);
+  const candidates = [
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "MiKTeX", "miktex", "bin", "x64"),
+    process.env.APPDATA && path.join(process.env.APPDATA, "MiKTeX", "miktex", "bin", "x64"),
+    ...programFiles.map((root) => path.join(root, "MiKTeX", "miktex", "bin", "x64")),
+  ].filter(Boolean);
+
+  // TeX Live installs each release in a versioned folder. Discover installed
+  // releases rather than hard-coding a particular year.
+  try {
+    for (const version of fsSync.readdirSync("C:\\texlive", { withFileTypes: true })) {
+      if (version.isDirectory()) candidates.push(path.join("C:\\texlive", version.name, "bin", "windows"));
+    }
+  } catch {
+    // TeX Live is optional; the normal PATH check below still applies.
+  }
+
+  return candidates;
+}
+
+function latexPath() {
+  const systemPath = process.platform === "win32" ? process.env.Path || process.env.PATH : process.env.PATH;
+  const platformPaths = process.platform === "darwin"
+    ? ["/Library/TeX/texbin", "/opt/homebrew/bin", "/usr/local/bin"]
+    : windowsLatexPaths();
+  return [...platformPaths, systemPath].filter(Boolean).join(path.delimiter);
+}
+
+function getCompilerStatus() {
+  return new Promise((resolve) => {
+    let complete = false;
+    const finish = (status) => {
+      if (complete) return;
+      complete = true;
+      resolve(status);
+    };
+    let output = "";
+    let child;
+
+    try {
+      child = spawn(process.platform === "win32" ? "latexmk.exe" : "latexmk", ["-v"], {
+        env: { ...process.env, PATH: latexPath() },
+        windowsHide: true,
+      });
+    } catch {
+      finish({ platform: process.platform, latexmkAvailable: false });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish({ platform: process.platform, latexmkAvailable: false });
+    }, 5000);
+
+    child.stdout?.on("data", (data) => { output += data.toString(); });
+    child.stderr?.on("data", (data) => { output += data.toString(); });
+    child.once("error", () => {
+      clearTimeout(timeout);
+      finish({ platform: process.platform, latexmkAvailable: false });
+    });
+    child.once("close", (code) => {
+      clearTimeout(timeout);
+      finish({
+        platform: process.platform,
+        latexmkAvailable: code === 0,
+        version: code === 0 ? output.split(/\r?\n/).find((line) => /latexmk/i.test(line))?.trim() || "latexmk" : undefined,
+        installerName: process.platform === "win32" ? "MiKTeX" : undefined,
+        installerUrl: process.platform === "win32" ? "https://miktex.org/download" : undefined,
+      });
+    });
+  });
 }
 
 function bundledNodePath() {
@@ -555,21 +622,21 @@ async function startLocalServer() {
   const port = await findAvailablePort();
   const runtimePath = path.join(process.resourcesPath, "next");
   const serverPath = path.join(runtimePath, "server.js");
-  const workspacePath = getMacWorkspacePath();
+  const workspacePath = getWorkspacePath();
 
   await fs.mkdir(workspacePath, { recursive: true });
 
-  // Use Electron's helper executable rather than the Quire app executable.
-  // It runs this as a regular Node process without making macOS advertise a
-  // second Dock application, while retaining the runtime Next expects.
-  nextServer = spawn(process.helperExecPath, [serverPath], {
+  // macOS uses Electron's helper so the local server never appears as a
+  // second Dock app. Windows uses Electron itself in Node mode.
+  const serverExecutable = process.platform === "darwin" ? process.helperExecPath || process.execPath : process.execPath;
+  nextServer = spawn(serverExecutable, [serverPath], {
     cwd: runtimePath,
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
-      PATH: macPath(),
+      PATH: latexPath(),
       NODE_PATH: bundledNodePath(),
       QUIRE_WORKSPACE: workspacePath,
     },
@@ -699,7 +766,7 @@ function setWindowAppearance(appearance) {
 
 function getSafeProjectPath(projectId) {
   if (!/^[a-z0-9][a-z0-9-]*$/i.test(projectId)) throw new Error("Quire could not find that project.");
-  const workspacePath = path.resolve(getMacWorkspacePath());
+  const workspacePath = path.resolve(getWorkspacePath());
   const projectPath = path.resolve(workspacePath, projectId);
   if (path.dirname(projectPath) !== workspacePath) throw new Error("Quire could not find that project.");
   return projectPath;
@@ -726,7 +793,7 @@ app.whenReady().then(async () => {
 
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose your Quire workspace",
-      defaultPath: getMacWorkspacePath(),
+      defaultPath: getWorkspacePath(),
       buttonLabel: "Use this folder",
       properties: ["openDirectory", "createDirectory"],
     });
@@ -734,7 +801,7 @@ app.whenReady().then(async () => {
     if (result.canceled || !result.filePaths[0]) return { cancelled: true };
 
     const workspacePath = result.filePaths[0];
-    await saveMacWorkspacePath(workspacePath);
+    await saveWorkspacePath(workspacePath);
     await restartLocalServer();
     return { path: workspacePath };
   });
@@ -748,6 +815,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("quire:get-launch-state", () => ({
     onboardingComplete: !isFirstLaunch,
   }));
+
+  ipcMain.handle("quire:get-compiler-status", () => getCompilerStatus());
 
   ipcMain.handle("quire:enter-onboarding", () => {
     enterOnboardingWindow();
@@ -786,7 +855,7 @@ app.whenReady().then(async () => {
       delete encryptedApiKeys[provider];
     } else if (typeof input?.apiKey === "string" && input.apiKey.trim()) {
       if (!safeStorage.isEncryptionAvailable()) {
-        throw new Error("macOS Keychain is not available, so Quire cannot securely save an AI API key.");
+        throw new Error("Secure system credential storage is not available, so Quire cannot securely save an AI API key.");
       }
       encryptedApiKeys[provider] = safeStorage.encryptString(input.apiKey.trim()).toString("base64");
     }

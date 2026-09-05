@@ -1,5 +1,5 @@
 import { KeyRound, MousePointer2, ShieldCheck, Sparkles, WandSparkles } from "lucide-react";
-import { QUIRE_MAC_DOWNLOAD_URL } from "@/lib/links";
+import { QUIRE_DOWNLOADS_URL } from "@/lib/links";
 
 const promises = [
   { icon: KeyRound, title: "Your provider", body: "Choose a direct provider, OpenRouter, or a compatible API in Settings. Quire never provides, sees, or reuses your key." },
@@ -16,7 +16,7 @@ export function AIAssistantStory() {
           <h2 className="mk-display">A writing room, on your terms.</h2>
           <p className="mk-ai-story__lede">Refine a selected passage, repair a rough draft, or begin a complete LaTeX document from a clear brief—without handing your work over to an impersonal editor.</p>
           <p className="mk-ai-story__note">Built for careful writing, not shortcuts. Every proposal compiles privately for review and never changes a file in the background.</p>
-          <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--light">Try Quire Draft in Quire <WandSparkles size={16} /></a>
+          <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--light">Try Quire Draft in Quire <WandSparkles size={16} /></a>
         </div>
 
         <div className="mk-ai-story__demo" aria-label="An example of Quire Draft reviewing selected writing">

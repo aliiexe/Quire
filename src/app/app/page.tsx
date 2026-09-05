@@ -25,6 +25,14 @@ const projectTemplates: Array<{ id: OnboardingTemplate; eyebrow: string; title: 
   { id: "thesis", eyebrow: "LONG-FORM", title: "Thesis", description: "A considered foundation for chapters and citations." },
 ];
 
+type CompilerStatus = {
+  platform: string;
+  latexmkAvailable: boolean;
+  version?: string;
+  installerName?: string;
+  installerUrl?: string;
+};
+
 export default function Dashboard() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +50,7 @@ export default function Dashboard() {
   const [onboardingReady, setOnboardingReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [projectDefaults, setProjectDefaults] = useState<OnboardingPreferences>(initialProjectDefaults);
+  const [compilerStatus, setCompilerStatus] = useState<CompilerStatus | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -52,6 +61,21 @@ export default function Dashboard() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const desktop = (window as Window & {
+      quireDesktop?: { getCompilerStatus?: () => Promise<CompilerStatus> };
+    }).quireDesktop;
+
+    void desktop?.getCompilerStatus?.()
+      .then((status) => {
+        if (!cancelled) setCompilerStatus(status);
+      })
+      .catch(() => undefined);
+
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -316,6 +340,19 @@ export default function Dashboard() {
             <p className="mt-4 max-w-lg text-sm leading-6 text-[var(--quire-muted)] sm:text-base">Create a new LaTeX project, bring in work you already have, or pick up exactly where you left off.</p>
           </section>
 
+          {compilerStatus?.platform === "win32" && !compilerStatus.latexmkAvailable ? (
+            <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-5 shadow-[0_12px_30px_rgba(20,20,20,0.04)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className="flex gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]"><FileText className="h-5 w-5" /></span>
+                <div>
+                  <p className="font-semibold tracking-[-0.02em]">Set up local PDF compilation</p>
+                  <p className="mt-1 max-w-xl text-sm leading-5 text-[var(--quire-muted)]">Quire is ready to edit. Install MiKTeX, or make TeX Live&apos;s <span className="font-mono text-[0.9em]">latexmk</span> available on this PC, to compile PDFs locally.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => void openExternalUrl(compilerStatus.installerUrl || "https://miktex.org/download")} className="shrink-0 rounded-xl bg-[var(--quire-text)] px-4 py-2.5 text-sm font-semibold text-[var(--quire-surface)] transition-opacity hover:opacity-85">Get MiKTeX</button>
+            </section>
+          ) : null}
+
           <section className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
             <button 
               onClick={() => {
@@ -415,7 +452,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-6">
               <div>
                 <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.13em] text-[var(--quire-red)]"><ShieldCheck className="h-3.5 w-3.5" /> LOCAL-ONLY BY DESIGN</div>
-                <Dialog.Title className="mt-3 text-3xl font-semibold tracking-[-0.055em] text-[var(--quire-text)]">Your writing stays on your Mac.</Dialog.Title>
+                <Dialog.Title className="mt-3 text-3xl font-semibold tracking-[-0.055em] text-[var(--quire-text)]">Your writing stays on your computer.</Dialog.Title>
               </div>
               <Dialog.Close className="rounded-lg px-2 py-1 text-sm font-semibold text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]">Close</Dialog.Close>
             </div>
@@ -423,11 +460,11 @@ export default function Dashboard() {
             <div className="mt-6 grid gap-3">
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
-                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Files remain yours.</strong> Documents, assets, project settings, and generated PDFs are saved in the workspace folder you choose. You can inspect, copy, back up, or delete them in Finder.</p>
+                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Files remain yours.</strong> Documents, assets, project settings, and generated PDFs are saved in the workspace folder you choose. You can inspect, copy, back up, or delete them in Finder or File Explorer.</p>
               </div>
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <CloudOff className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
-                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your Mac to power the interface. Optional Quire Draft sends only selected text or a writing brief directly to your chosen provider when you request it.</p>
+                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your computer to power the interface. Optional Quire Draft sends only selected text or a writing brief directly to your chosen provider when you request it.</p>
               </div>
             </div>
             <p className="mt-5 text-xs leading-5 text-[var(--quire-muted)]">This is the in-app privacy summary. Read the full policy for the privacy contact and complete local-first data practices.</p>
@@ -447,7 +484,7 @@ export default function Dashboard() {
         open={Boolean(projectPendingDeletion)}
         onOpenChange={(open) => { if (!open) setProjectPendingDeletion(null); }}
         title={projectPendingDeletion ? `Move “${projectPendingDeletion.name}” to the Trash?` : "Move project to the Trash?"}
-        description="The project and all of its files will be moved to the macOS Trash. You can restore them from there if needed."
+        description="The project and all of its files will be moved to the Trash or Recycle Bin. You can restore them from there if needed."
         confirmLabel="Move to Trash"
         onConfirm={() => void handleDeleteProject()}
       />
@@ -459,7 +496,7 @@ export default function Dashboard() {
             <Dialog.Title className="text-2xl font-semibold tracking-[-0.045em] text-[var(--quire-text)]">
               What are you making today?
             </Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Choose a starting structure. Every project remains a normal folder of files on your Mac.</Dialog.Description>
+            <Dialog.Description className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Choose a starting structure. Every project remains a normal folder of files on your computer.</Dialog.Description>
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {projectTemplates.map((template) => (
                 <button

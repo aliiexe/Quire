@@ -7,7 +7,7 @@ const faqs = [
   ["Can I use an existing LaTeX project?", "Yes. Keep the folder structure you already use, or import an archive into a new Quire project and continue from there."],
   ["What does auto compile do?", "When it is enabled, Quire saves your changes and runs a local build after a short pause, then refreshes the preview when the build succeeds."],
   ["How does Quire Draft handle my writing?", "It is optional and works with your own provider key—direct, through OpenRouter, or with a compatible API. You choose a passage or give it a brief, then review its proposed source and temporary compiled PDF before applying it. Quire never sends an entire project automatically or rewrites in the background."],
-  ["Is Quire really free?", "Yes. Quire is free and open source, with no paid plans, accounts, or required cloud service. Your projects stay on your Mac."],
+  ["Is Quire really free?", "Yes. Quire is free and open source, with no paid plans, accounts, or required cloud service. Your projects stay on your computer."],
 ];
 
 export function FAQ() {

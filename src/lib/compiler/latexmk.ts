@@ -39,7 +39,7 @@ export class LatexmkCompiler implements LatexCompiler {
 
       args.push(input.rootFile);
 
-      const child = spawn("latexmk", args, {
+      const child = spawn(process.platform === "win32" ? "latexmk.exe" : "latexmk", args, {
         cwd: projectPath,
         env: { ...process.env, PATH: process.env.PATH },
         timeout: parseInt(process.env.QUIRE_COMPILE_TIMEOUT_MS || "60000", 10),

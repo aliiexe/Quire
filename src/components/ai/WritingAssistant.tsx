@@ -11,9 +11,10 @@ export type WritingSelection = {
 };
 
 type AssistantMode = "improve" | "correct" | "shorten" | "explain";
+type AiProvider = "openai" | "anthropic" | "openrouter";
 
 type DesktopAiBridge = {
-  getAiSettings?: () => Promise<{ model: string; keyConfigured: boolean }>;
+  getAiSettings?: () => Promise<{ provider: AiProvider; providerLabel: string; model: string; keyConfigured: boolean }>;
   assistWriting?: (input: { selection: string; mode: AssistantMode }) => Promise<{ output: string }>;
 };
 
@@ -36,6 +37,7 @@ const actions: Array<{ id: AssistantMode; label: string; description: string }> 
 export function WritingAssistant({ selection, onApply }: WritingAssistantProps) {
   const [open, setOpen] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
+  const [providerLabel, setProviderLabel] = useState("AI provider");
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [working, setWorking] = useState(false);
   const [output, setOutput] = useState("");
@@ -51,7 +53,11 @@ export function WritingAssistant({ selection, onApply }: WritingAssistantProps) 
     setLoadingSettings(true);
     setError("");
     void bridge.getAiSettings()
-      .then((settings) => { if (!cancelled) setKeyConfigured(settings.keyConfigured); })
+      .then((settings) => {
+        if (cancelled) return;
+        setKeyConfigured(settings.keyConfigured);
+        setProviderLabel(settings.providerLabel);
+      })
       .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Could not read AI Assistant settings."); })
       .finally(() => { if (!cancelled) setLoadingSettings(false); });
     return () => { cancelled = true; };
@@ -118,7 +124,7 @@ export function WritingAssistant({ selection, onApply }: WritingAssistantProps) 
             <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[var(--quire-text-secondary)]">{selection?.text.trim() || "Select text in the editor before asking for help."}</p>
           </div>
 
-          {loadingSettings ? <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Checking your AI Assistant setup…</div> : !keyConfigured ? <div className="mt-5 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-red-soft)] p-4 text-sm leading-6 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Add your own API key first.</strong> Go to the dashboard&apos;s Settings → AI Assistant to securely add an OpenAI API key on this Mac.</div> : <>
+          {loadingSettings ? <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Checking your AI Assistant setup…</div> : !keyConfigured ? <div className="mt-5 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-red-soft)] p-4 text-sm leading-6 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Add your own API key first.</strong> Go to the dashboard&apos;s Settings → AI Assistant to securely add a {providerLabel} API key on this Mac.</div> : <>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {actions.map((action) => <button key={action.id} type="button" disabled={working || !selection?.text.trim()} onClick={() => void requestAssistance(action.id)} className={`rounded-xl border p-3.5 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45 ${mode === action.id ? "border-[var(--quire-red)] bg-[var(--quire-red-soft)]" : "border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] hover:border-[var(--quire-muted)]"}`}><div className="text-sm font-semibold">{action.label}</div><div className="mt-1 text-xs text-[var(--quire-muted)]">{action.description}</div></button>)}
             </div>

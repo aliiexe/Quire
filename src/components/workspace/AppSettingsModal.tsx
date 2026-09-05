@@ -6,15 +6,60 @@ import { Check, KeyRound, Loader2, Monitor, Moon, ShieldCheck, Sparkles, Sun, X 
 
 type Appearance = "light" | "dark" | "system";
 type SettingsTab = "general" | "ai";
+type AiProvider = "openai" | "anthropic" | "openrouter";
 
 type AiSettings = {
+  provider: AiProvider;
+  providerLabel: string;
   model: string;
   keyConfigured: boolean;
 };
 
 type DesktopAiBridge = {
-  getAiSettings?: () => Promise<AiSettings>;
-  saveAiSettings?: (input: { apiKey?: string; model: string; removeApiKey?: boolean }) => Promise<AiSettings>;
+  getAiSettings?: (input?: { provider?: AiProvider }) => Promise<AiSettings>;
+  saveAiSettings?: (input: { provider: AiProvider; apiKey?: string; model: string; removeApiKey?: boolean }) => Promise<AiSettings>;
+};
+
+const CUSTOM_MODEL = "__custom_model__";
+
+const providers: Record<AiProvider, { label: string; keyLabel: string; keyPlaceholder: string; keyHelp: string }> = {
+  openrouter: {
+    label: "OpenRouter",
+    keyLabel: "OpenRouter API key",
+    keyPlaceholder: "sk-or-v1-…",
+    keyHelp: "One key can access a broad model catalog. Its free router is subject to availability and provider limits.",
+  },
+  openai: {
+    label: "OpenAI",
+    keyLabel: "OpenAI API key",
+    keyPlaceholder: "sk-…",
+    keyHelp: "Use a key from your OpenAI account. Quire does not provide credits or bill for AI use.",
+  },
+  anthropic: {
+    label: "Anthropic",
+    keyLabel: "Anthropic API key",
+    keyPlaceholder: "sk-ant-…",
+    keyHelp: "Use a key from your Anthropic Console account. Quire does not provide credits or bill for AI use.",
+  },
+};
+
+const curatedModels: Record<AiProvider, Array<{ id: string; label: string }>> = {
+  openrouter: [
+    { id: "openrouter/free", label: "Free models router — $0 when available" },
+    { id: "~anthropic/claude-sonnet-latest", label: "Claude Sonnet latest — balanced" },
+    { id: "~openai/gpt-latest", label: "GPT latest — capable" },
+  ],
+  openai: [
+    { id: "gpt-5", label: "GPT-5 — best overall" },
+    { id: "gpt-5-mini", label: "GPT-5 mini — fast and lower cost" },
+    { id: "gpt-5-nano", label: "GPT-5 nano — lowest cost" },
+    { id: "gpt-4.1", label: "GPT-4.1 — reliable writing" },
+  ],
+  anthropic: [
+    { id: "claude-opus-5", label: "Claude Opus 5 — strongest reasoning" },
+    { id: "claude-sonnet-5", label: "Claude Sonnet 5 — best balance" },
+    { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 — fastest" },
+  ],
 };
 
 function aiBridge() {
@@ -30,7 +75,8 @@ interface AppSettingsModalProps {
 
 export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceChange }: AppSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
-  const [model, setModel] = useState("gpt-5-mini");
+  const [provider, setProvider] = useState<AiProvider>("openrouter");
+  const [model, setModel] = useState("openrouter/free");
   const [apiKey, setApiKey] = useState("");
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,6 +92,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
     void aiBridge()?.getAiSettings?.()
       .then((settings) => {
         if (cancelled) return;
+        setProvider(settings.provider);
         setModel(settings.model);
         setKeyConfigured(settings.keyConfigured);
       })
@@ -56,17 +103,40 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
     return () => { cancelled = true; };
   }, [open]);
 
+  const changeProvider = (nextProvider: AiProvider) => {
+    if (nextProvider === provider) return;
+    setProvider(nextProvider);
+    setApiKey("");
+    setError("");
+    setNotice("");
+    const bridge = aiBridge();
+    if (!bridge?.getAiSettings) return;
+    setLoading(true);
+    void bridge.getAiSettings({ provider: nextProvider })
+      .then((settings) => {
+        setModel(settings.model);
+        setKeyConfigured(settings.keyConfigured);
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load that provider's settings."))
+      .finally(() => setLoading(false));
+  };
+
   const saveAiSettings = async () => {
     const bridge = aiBridge();
     if (!bridge?.saveAiSettings) {
       setError("AI Assistant settings are available in the Quire desktop app.");
       return;
     }
+    if (!model.trim()) {
+      setError("Choose a model or enter a custom model ID.");
+      return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      const settings = await bridge.saveAiSettings({ apiKey, model });
+      const settings = await bridge.saveAiSettings({ provider, apiKey, model });
+      setProvider(settings.provider);
       setModel(settings.model);
       setKeyConfigured(settings.keyConfigured);
       setApiKey("");
@@ -85,7 +155,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
     setError("");
     setNotice("");
     try {
-      const settings = await bridge.saveAiSettings({ model, removeApiKey: true });
+      const settings = await bridge.saveAiSettings({ provider, model, removeApiKey: true });
       setKeyConfigured(settings.keyConfigured);
       setApiKey("");
       setNotice("The saved API key was removed from this Mac.");
@@ -146,7 +216,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                 <div>
                   <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.13em] text-[var(--quire-red)]"><Sparkles className="h-3.5 w-3.5" /> AI ASSISTANT</div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-[-0.045em]">Your key. Your choice.</h2>
-                  <p className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Quire uses your own OpenAI API key only when you request a writing action. It sends only the passage you select, never a project in the background.</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Choose OpenAI, Anthropic, or OpenRouter. Quire sends only the passage you select when you request a writing action—never a project in the background.</p>
                 </div>
 
                 <div className="rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
@@ -155,14 +225,27 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
 
                 {loading ? <div className="flex items-center gap-2 py-8 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Loading AI Assistant settings…</div> : <>
                   <div>
-                    <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-api-key">OpenAI API key</label>
-                    <div className="mt-2 flex gap-2"><div className="relative min-w-0 flex-1"><KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--quire-muted)]" /><input id="ai-api-key" type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={keyConfigured ? "Key saved — paste to replace" : "sk-…"} className="w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] py-2.5 pl-10 pr-3 text-sm outline-none focus:border-[var(--quire-red)]" /></div></div>
-                    <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">Create and manage API keys in your OpenAI account. Quire does not provide credits or bill for AI use.</p>
+                    <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-provider">Provider</label>
+                    <select id="ai-provider" value={provider} onChange={(event) => changeProvider(event.target.value as AiProvider)} className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 text-sm font-medium outline-none focus:border-[var(--quire-red)]">
+                      <option value="openrouter">OpenRouter — broad catalog, including free models</option>
+                      <option value="openai">OpenAI — GPT models</option>
+                      <option value="anthropic">Anthropic — Claude models</option>
+                    </select>
+                    <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">OpenRouter is the simplest way to try many providers with one key; direct OpenAI and Anthropic connections are also available.</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-api-key">{providers[provider].keyLabel}</label>
+                    <div className="mt-2 flex gap-2"><div className="relative min-w-0 flex-1"><KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--quire-muted)]" /><input id="ai-api-key" type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={keyConfigured ? "Key saved — paste to replace" : providers[provider].keyPlaceholder} className="w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] py-2.5 pl-10 pr-3 text-sm outline-none focus:border-[var(--quire-red)]" /></div></div>
+                    <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">{providers[provider].keyHelp}</p>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-model">Model</label>
-                    <input id="ai-model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="gpt-5-mini" className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 font-mono text-sm outline-none focus:border-[var(--quire-red)]" />
-                    <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">Use a text model available to your own OpenAI account.</p>
+                    <select id="ai-model" value={curatedModels[provider].some((option) => option.id === model) ? model : CUSTOM_MODEL} onChange={(event) => setModel(event.target.value === CUSTOM_MODEL ? "" : event.target.value)} className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 text-sm outline-none focus:border-[var(--quire-red)]">
+                      {curatedModels[provider].map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                      <option value={CUSTOM_MODEL}>Custom model ID…</option>
+                    </select>
+                    {!curatedModels[provider].some((option) => option.id === model) && <input aria-label="Custom model ID" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Enter a provider model ID" className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 font-mono text-sm outline-none focus:border-[var(--quire-red)]" />}
+                    <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">Start with a curated model, or enter any text model ID that your selected provider supports.</p>
                   </div>
                   {error && <p role="alert" className="text-sm text-[var(--quire-red)]">{error}</p>}
                   {notice && <p className="flex items-center gap-1.5 text-sm text-[#5d875b]"><Check className="h-4 w-4" />{notice}</p>}

@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld("quireDesktop", {
   enterOnboarding: () => ipcRenderer.invoke("quire:enter-onboarding"),
   completeOnboarding: () => ipcRenderer.invoke("quire:complete-onboarding"),
   setWindowAppearance: (appearance) => ipcRenderer.invoke("quire:set-window-appearance", appearance),
-  getAiSettings: () => ipcRenderer.invoke("quire:get-ai-settings"),
+  getAiSettings: (input) => ipcRenderer.invoke("quire:get-ai-settings", input),
   saveAiSettings: (input) => ipcRenderer.invoke("quire:save-ai-settings", input),
   assistWriting: (input) => ipcRenderer.invoke("quire:assist-writing", input),
   savePdf: (input) => ipcRenderer.invoke("quire:save-pdf", input),

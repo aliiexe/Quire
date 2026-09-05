@@ -14,7 +14,12 @@ let localServerUrl;
 let isFirstLaunch = false;
 let workspaceMenuState = { autoSave: true, autoCompile: true };
 const onboardingWindowSize = { width: 1100, height: 800, minWidth: 960, minHeight: 700 };
-const DEFAULT_AI_MODEL = "gpt-5-mini";
+const AI_PROVIDERS = {
+  openai: { label: "OpenAI", defaultModel: "gpt-5-mini" },
+  anthropic: { label: "Anthropic", defaultModel: "claude-sonnet-5" },
+  openrouter: { label: "OpenRouter", defaultModel: "openrouter/free" },
+};
+const DEFAULT_AI_PROVIDER = "openrouter";
 
 function sendWorkspaceCommand(command) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -124,33 +129,70 @@ function getAiAssistantPreferencesPath() {
   return path.join(app.getPath("userData"), "ai-assistant.json");
 }
 
-function normalizeAiModel(model) {
-  if (typeof model !== "string") return DEFAULT_AI_MODEL;
+function isAiProvider(provider) {
+  return typeof provider === "string" && Object.hasOwn(AI_PROVIDERS, provider);
+}
+
+function normalizeAiProvider(provider, fallback = DEFAULT_AI_PROVIDER) {
+  return isAiProvider(provider) ? provider : fallback;
+}
+
+function defaultAiModel(provider) {
+  return AI_PROVIDERS[normalizeAiProvider(provider)].defaultModel;
+}
+
+function normalizeAiModel(model, provider) {
+  if (typeof model !== "string") return defaultAiModel(provider);
   const trimmed = model.trim();
-  return /^[a-zA-Z0-9._:-]{1,100}$/.test(trimmed) ? trimmed : DEFAULT_AI_MODEL;
+  return /^[a-zA-Z0-9._~:/-]{1,180}$/.test(trimmed) ? trimmed : defaultAiModel(provider);
+}
+
+function encryptedKeysFromPreferences(preferences) {
+  const encryptedApiKeys = {};
+  if (preferences?.encryptedApiKeys && typeof preferences.encryptedApiKeys === "object") {
+    for (const provider of Object.keys(AI_PROVIDERS)) {
+      if (typeof preferences.encryptedApiKeys[provider] === "string") {
+        encryptedApiKeys[provider] = preferences.encryptedApiKeys[provider];
+      }
+    }
+  }
+
+  // AI Assistant originally supported OpenAI alone. Preserve an existing
+  // local key as the user moves to the provider-neutral settings format.
+  if (!encryptedApiKeys.openai && typeof preferences?.encryptedApiKey === "string") {
+    encryptedApiKeys.openai = preferences.encryptedApiKey;
+  }
+
+  return encryptedApiKeys;
 }
 
 async function readAiAssistantPreferences() {
   try {
     const preferences = JSON.parse(await fs.readFile(getAiAssistantPreferencesPath(), "utf8"));
+    const encryptedApiKeys = encryptedKeysFromPreferences(preferences);
+    const hasLegacyOpenAiKey = Boolean(preferences?.encryptedApiKey && !preferences?.provider);
+    const provider = normalizeAiProvider(preferences?.provider, hasLegacyOpenAiKey ? "openai" : DEFAULT_AI_PROVIDER);
     return {
-      model: normalizeAiModel(preferences?.model),
-      encryptedApiKey: typeof preferences?.encryptedApiKey === "string" ? preferences.encryptedApiKey : "",
+      provider,
+      model: normalizeAiModel(preferences?.model, provider),
+      encryptedApiKeys,
     };
   } catch (error) {
-    if (error?.code === "ENOENT") return { model: DEFAULT_AI_MODEL, encryptedApiKey: "" };
+    if (error?.code === "ENOENT") return { provider: DEFAULT_AI_PROVIDER, model: defaultAiModel(DEFAULT_AI_PROVIDER), encryptedApiKeys: {} };
     throw new Error("Quire could not read the AI Assistant settings.");
   }
 }
 
 function getAiAssistantKey(preferences) {
-  if (!preferences.encryptedApiKey) throw new Error("Add your OpenAI API key in Settings before using the AI Assistant.");
+  const encryptedApiKey = preferences.encryptedApiKeys[preferences.provider];
+  const providerLabel = AI_PROVIDERS[preferences.provider].label;
+  if (!encryptedApiKey) throw new Error(`Add your ${providerLabel} API key in Settings before using the AI Assistant.`);
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error("macOS Keychain is not available, so Quire cannot securely use an AI API key.");
   }
 
   try {
-    return safeStorage.decryptString(Buffer.from(preferences.encryptedApiKey, "base64"));
+    return safeStorage.decryptString(Buffer.from(encryptedApiKey, "base64"));
   } catch {
     throw new Error("Quire could not read your saved AI API key. Add it again in Settings.");
   }
@@ -191,7 +233,53 @@ async function requestWritingAssistance({ selection, mode }) {
 
   const preferences = await readAiAssistantPreferences();
   const apiKey = getAiAssistantKey(preferences);
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const instructions = writingAssistantInstructions(mode);
+  let response;
+  let extractOutput;
+
+  if (preferences.provider === "anthropic") {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: preferences.model,
+        max_tokens: 900,
+        system: instructions,
+        messages: [{ role: "user", content: selection }],
+      }),
+    });
+    extractOutput = (payload) => payload?.content
+      ?.filter((part) => part?.type === "text" && typeof part.text === "string")
+      .map((part) => part.text)
+      .join("\n");
+  } else if (preferences.provider === "openrouter") {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: preferences.model,
+        max_tokens: 900,
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: selection },
+        ],
+      }),
+    });
+    extractOutput = (payload) => {
+      const content = payload?.choices?.[0]?.message?.content;
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) return content.filter((part) => typeof part?.text === "string").map((part) => part.text).join("\n");
+      return "";
+    };
+  } else {
+    response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -201,19 +289,20 @@ async function requestWritingAssistance({ selection, mode }) {
       model: preferences.model,
       store: false,
       max_output_tokens: 900,
-      instructions: writingAssistantInstructions(mode),
+      instructions,
       input: selection,
     }),
   });
+    extractOutput = (payload) => payload?.output_text;
+  }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(payload?.error?.message || "The AI Assistant could not complete that request.");
   }
 
-  const output = typeof payload?.output_text === "string"
-    ? payload.output_text.trim()
-    : "";
+  const rawOutput = extractOutput(payload);
+  const output = typeof rawOutput === "string" ? rawOutput.trim() : "";
   if (!output) throw new Error("The AI Assistant returned an empty response. Try again.");
   return { output };
 }
@@ -474,31 +563,40 @@ app.whenReady().then(async () => {
     if (appearance === "light" || appearance === "dark") setWindowAppearance(appearance);
   });
 
-  ipcMain.handle("quire:get-ai-settings", async () => {
+  ipcMain.handle("quire:get-ai-settings", async (_event, input) => {
     const preferences = await readAiAssistantPreferences();
+    const provider = normalizeAiProvider(input?.provider, preferences.provider);
     return {
-      model: preferences.model,
-      keyConfigured: Boolean(preferences.encryptedApiKey),
+      provider,
+      providerLabel: AI_PROVIDERS[provider].label,
+      model: provider === preferences.provider ? preferences.model : defaultAiModel(provider),
+      keyConfigured: Boolean(preferences.encryptedApiKeys[provider]),
     };
   });
 
   ipcMain.handle("quire:save-ai-settings", async (_event, input) => {
     const current = await readAiAssistantPreferences();
-    const model = normalizeAiModel(input?.model);
-    let encryptedApiKey = current.encryptedApiKey;
+    const provider = normalizeAiProvider(input?.provider, current.provider);
+    const model = normalizeAiModel(input?.model, provider);
+    const encryptedApiKeys = { ...current.encryptedApiKeys };
 
     if (input?.removeApiKey === true) {
-      encryptedApiKey = "";
+      delete encryptedApiKeys[provider];
     } else if (typeof input?.apiKey === "string" && input.apiKey.trim()) {
       if (!safeStorage.isEncryptionAvailable()) {
         throw new Error("macOS Keychain is not available, so Quire cannot securely save an AI API key.");
       }
-      encryptedApiKey = safeStorage.encryptString(input.apiKey.trim()).toString("base64");
+      encryptedApiKeys[provider] = safeStorage.encryptString(input.apiKey.trim()).toString("base64");
     }
 
     await fs.mkdir(app.getPath("userData"), { recursive: true });
-    await fs.writeFile(getAiAssistantPreferencesPath(), JSON.stringify({ model, encryptedApiKey }, null, 2));
-    return { model, keyConfigured: Boolean(encryptedApiKey) };
+    await fs.writeFile(getAiAssistantPreferencesPath(), JSON.stringify({ provider, model, encryptedApiKeys }, null, 2));
+    return {
+      provider,
+      providerLabel: AI_PROVIDERS[provider].label,
+      model,
+      keyConfigured: Boolean(encryptedApiKeys[provider]),
+    };
   });
 
   ipcMain.handle("quire:assist-writing", async (_event, input) => requestWritingAssistance(input || {}));

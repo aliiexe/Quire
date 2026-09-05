@@ -1,16 +1,20 @@
-# Quire 0.2.2 — macOS Preview
+# Quire 0.2.3 — Local writing, with deliberate AI review
 
 Quire is a free, open-source, local-first workspace for writing and compiling LaTeX on your Mac. Your projects, PDFs, and builds stay on your computer—there is no account, cloud workspace, remote compiler, analytics, or paid tier.
 
-## What’s new
+## What’s new in 0.2.3
 
-- **Quire Draft (optional)** — Bring your own provider key—direct, through OpenRouter, or via a compatible API—to refine selected text or create a complete LaTeX draft from a brief. Every result stays reviewable; Quire never changes your document in the background or uploads an entire project.
-- **A clearer workspace story** — The website now uses expressive editor, save, compile, and preview marks in place of the numbered Source & Output sequence.
+- **Quire Draft previews** — Suggestions now appear directly in the editor as a temporary proposal. Choose **Apply** or **Reject**; nothing changes or saves until you apply it.
+- **Your direction, included** — Add an optional custom instruction when refining selected text, so you can preserve tone, language, LaTeX commands, or any other constraint that matters.
+- **Readable selections** — Selected editor text is now clearly visible in both light and dark appearances.
+- **Smoother local workspace** — The bundled local server now runs without creating an extra Dock app alongside Quire.
+- **Better project handling** — Drag files into folders in the explorer to move them, and drag one or more files into a project to upload them to its local assets folder.
+- **Flexible optional AI setup** — Use your own provider API key directly, through OpenRouter, or through a compatible endpoint. The built-in catalog includes exact model IDs and named free OpenRouter options.
 
 ## Download
 
-- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.1-arm64.dmg`.
-- **Intel Mac**: download `Quire-0.2.1-x64.dmg`.
+- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.3-arm64.dmg`.
+- **Intel Mac**: download `Quire-0.2.3-x64.dmg`.
 
 ## Install Quire
 

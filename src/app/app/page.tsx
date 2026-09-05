@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, CloudOff, FileArchive, FileText, FolderOpen, HardDrive, Loader2, Moon, Plus, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { ArrowUpRight, CloudOff, FileArchive, FileText, FolderOpen, HardDrive, Loader2, Moon, Plus, Settings, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { QuireWordmark } from "@/components/brand/logo";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import { FirstLaunch, type OnboardingPreferences, type OnboardingTemplate } from
 import * as Dialog from "@radix-ui/react-dialog";
 import { QUIRE_PRIVACY_POLICY_URL, QUIRE_WEBSITE_URL } from "@/lib/links";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { AppSettingsModal } from "@/components/workspace/AppSettingsModal";
 
 const initialProjectDefaults: OnboardingPreferences = {
   autoCompile: true,
@@ -30,12 +31,14 @@ export default function Dashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const [projectActionError, setProjectActionError] = useState("");
   const [projectPendingDeletion, setProjectPendingDeletion] = useState<ProjectSummary | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectTemplate, setNewProjectTemplate] = useState<OnboardingTemplate>("article");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [appearance, setAppearance] = useState<"light" | "dark" | "system">("system");
   const [onboardingReady, setOnboardingReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [projectDefaults, setProjectDefaults] = useState<OnboardingPreferences>(initialProjectDefaults);
@@ -54,7 +57,10 @@ export default function Dashboard() {
   useEffect(() => {
     const savedTheme = localStorage.getItem("quire:theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const nextTheme = savedTheme === "dark" || (savedTheme !== "light" && prefersDark) ? "dark" : "light";
+    const nextAppearance = savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system";
+    const nextTheme = nextAppearance === "dark" || (nextAppearance === "system" && prefersDark) ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    setAppearance(nextAppearance);
     setTheme(nextTheme);
     const desktop = (window as Window & {
       quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
@@ -130,7 +136,9 @@ export default function Dashboard() {
     if (preferences) setProjectDefaults(preferences);
     const savedTheme = localStorage.getItem("quire:theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setTheme(savedTheme === "dark" || (savedTheme !== "light" && prefersDark) ? "dark" : "light");
+    const nextAppearance = savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system";
+    setAppearance(nextAppearance);
+    setTheme(nextAppearance === "dark" || (nextAppearance === "system" && prefersDark) ? "dark" : "light");
     setShowOnboarding(false);
   };
 
@@ -215,6 +223,21 @@ export default function Dashboard() {
       quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
     }).quireDesktop;
     void desktop?.setWindowAppearance?.(nextTheme);
+    setAppearance(nextTheme);
+    setTheme(nextTheme);
+  };
+
+  const changeAppearance = (nextAppearance: "light" | "dark" | "system") => {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const nextTheme = nextAppearance === "dark" || (nextAppearance === "system" && prefersDark) ? "dark" : "light";
+    if (nextAppearance === "system") localStorage.removeItem("quire:theme");
+    else localStorage.setItem("quire:theme", nextAppearance);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    const desktop = (window as Window & {
+      quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
+    }).quireDesktop;
+    void desktop?.setWindowAppearance?.(nextTheme);
+    setAppearance(nextAppearance);
     setTheme(nextTheme);
   };
 
@@ -261,6 +284,15 @@ export default function Dashboard() {
             >
               <ShieldCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Privacy</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAppSettings(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]"
+              aria-label="Open app settings"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
             </button>
             <button
               type="button"
@@ -387,7 +419,7 @@ export default function Dashboard() {
               </div>
               <Dialog.Close className="rounded-lg px-2 py-1 text-sm font-semibold text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]">Close</Dialog.Close>
             </div>
-            <p className="mt-4 text-sm leading-6 text-[var(--quire-text-secondary)]">Quire&apos;s writing, compiling, and PDF preview workflow runs on this device. It has no account system, cloud sync, telemetry pipeline, remote compiler, or background upload of your project content.</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--quire-text-secondary)]">Quire&apos;s writing, compiling, and PDF preview workflow runs on this device. It has no account system, cloud sync, telemetry pipeline, remote compiler, or background upload of your project content. The optional AI Assistant only connects when you add your own key and ask it to help with selected text.</p>
             <div className="mt-6 grid gap-3">
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
@@ -395,7 +427,7 @@ export default function Dashboard() {
               </div>
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <CloudOff className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
-                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your Mac to power the interface. Opening a website, documentation, or GitHub link is always an action you choose and happens in your browser.</p>
+                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your Mac to power the interface. The optional AI Assistant sends only selected text directly to your chosen provider when you request it.</p>
               </div>
             </div>
             <p className="mt-5 text-xs leading-5 text-[var(--quire-muted)]">This is the in-app privacy summary. Read the full policy for the privacy contact and complete local-first data practices.</p>
@@ -403,6 +435,13 @@ export default function Dashboard() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <AppSettingsModal
+        open={showAppSettings}
+        onOpenChange={setShowAppSettings}
+        appearance={appearance}
+        onAppearanceChange={changeAppearance}
+      />
 
       <ConfirmationDialog
         open={Boolean(projectPendingDeletion)}

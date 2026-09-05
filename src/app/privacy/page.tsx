@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Quire's privacy policy for its local-first macOS app.",
 };
 
-const effectiveDate = "4 September 2026";
+const effectiveDate = "5 September 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -33,7 +33,7 @@ export default function PrivacyPolicyPage() {
           <div className="mt-12 space-y-10 text-[15px] leading-7 text-[var(--quire-text-secondary)] sm:text-base">
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">The short version</h2>
-              <p className="mt-3">Quire is a local-first macOS application. Your writing, project files, generated PDFs, and compiler output stay on your Mac in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app.</p>
+              <p className="mt-3">Quire is a local-first macOS application. Your writing, project files, generated PDFs, and compiler output stay on your Mac in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app. Its optional AI Assistant is off until you add your own API key and deliberately request help with selected text.</p>
             </section>
 
             <section>
@@ -43,12 +43,18 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Information we do not collect</h2>
-              <p className="mt-3">The desktop app does not require a sign-in, collect your name or email address, transmit your project content, track how you use the app, or send diagnostic or usage data to Quire. It does not sell or share personal information because it does not collect it.</p>
+              <p className="mt-3">The desktop app does not require a sign-in, collect your name or email address, track how you use the app, or send diagnostic or usage data to Quire. It does not sell or share personal information because it does not collect it. Quire does not transmit your project content unless you deliberately use the optional AI Assistant as described below.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">When a connection may happen</h2>
               <p className="mt-3">Quire runs a local service on your own Mac to power its interface. It is not a hosted workspace. Links to the website, GitHub, documentation, or other external services open only when you choose them; those services have their own privacy practices.</p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Optional AI Assistant</h2>
+              <p className="mt-3">AI Assistant is disabled by default. If you choose to configure it, you provide your own OpenAI API key. Quire encrypts that key using macOS Keychain and does not show it back to you. When you explicitly choose an AI action, Quire sends only the passage you selected and the requested editing action directly to OpenAI&apos;s API. It does not automatically send an entire project, compile output, or other files.</p>
+              <p className="mt-3">OpenAI processes any selected text you send under your own OpenAI account and its applicable terms and data policies. Quire requests that the response not be stored by the API, but Quire cannot control the provider&apos;s services or policies. Do not send confidential, personal, or sensitive material unless you are comfortable with the provider&apos;s handling of it.</p>
             </section>
 
             <section>

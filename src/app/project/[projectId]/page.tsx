@@ -17,6 +17,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { LatexDiagnostic } from "@/lib/compiler/compiler";
 import type { Project, ProjectNode } from "@/lib/projects/storage";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { WritingAssistant, type WritingSelection } from "@/components/ai/WritingAssistant";
 
 const EDITABLE_TEXT_EXTENSIONS = new Set([".tex", ".txt", ".bib", ".sty", ".cls", ".md", ".json", ".yaml", ".yml"]);
 
@@ -52,6 +53,7 @@ export default function Workspace() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState("");
   const [newFolderError, setNewFolderError] = useState("");
+  const [assistantSelection, setAssistantSelection] = useState<WritingSelection | null>(null);
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
   const [unsavedAction, setUnsavedAction] = useState<{ type: "dashboard" } | { type: "close-file"; path: string } | null>(null);
@@ -225,6 +227,27 @@ export default function Workspace() {
       updateFileContent(activeFile, value);
     }
   };
+
+  const handleAssistantSelection = useCallback((selection: WritingSelection) => {
+    setAssistantSelection(selection.text ? selection : null);
+  }, []);
+
+  const applyAssistantSuggestion = useCallback((replacement: string, selection: WritingSelection) => {
+    if (!activeFile || !replacement) return false;
+    const currentContent = fileContents[activeFile] || "";
+    if (currentContent.slice(selection.from, selection.to) !== selection.text) return false;
+
+    updateFileContent(
+      activeFile,
+      `${currentContent.slice(0, selection.from)}${replacement}${currentContent.slice(selection.to)}`,
+    );
+    setAssistantSelection({ from: selection.from, to: selection.from + replacement.length, text: replacement });
+    return true;
+  }, [activeFile, fileContents, updateFileContent]);
+
+  useEffect(() => {
+    setAssistantSelection(null);
+  }, [activeFile]);
 
   const hasDirtyFiles = Object.values(isDirty).some(Boolean);
 
@@ -521,6 +544,8 @@ export default function Workspace() {
               <div className="w-8 h-[18px] bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[14px] after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
             </div>
           </label>
+
+          <WritingAssistant selection={assistantSelection} onApply={applyAssistantSuggestion} />
           
           {/* Recompile Button */}
           <button 
@@ -754,6 +779,7 @@ export default function Workspace() {
                   <Editor 
                     value={fileContents[activeFile] || ""} 
                     onChange={handleEditorChange} 
+                    onSelectionChange={handleAssistantSelection}
                     diagnostics={diagnostics
                       .filter((diagnostic): diagnostic is LatexDiagnostic & { severity: "error" | "warning" } =>
                         (diagnostic.severity === "error" || diagnostic.severity === "warning") &&

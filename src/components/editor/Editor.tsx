@@ -8,6 +8,7 @@ import { EditorView } from "@codemirror/view";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { linter, Diagnostic as CMLintDiagnostic } from "@codemirror/lint";
+import type { WritingSelection } from "@/components/ai/WritingAssistant";
 
 // We need a custom interface for Quire's diagnostics
 export interface QuireDiagnostic {
@@ -81,9 +82,10 @@ interface EditorProps {
   onChange: (value: string) => void;
   language?: "latex" | "markdown" | "text";
   diagnostics?: QuireDiagnostic[];
+  onSelectionChange?: (selection: WritingSelection) => void;
 }
 
-export function Editor({ value, onChange, language = "latex", diagnostics = [] }: EditorProps) {
+export function Editor({ value, onChange, language = "latex", diagnostics = [], onSelectionChange }: EditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   useEffect(() => {
@@ -123,6 +125,16 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [] }
     };
   }, [diagnostics]);
 
+  const selectionListener = useMemo(() => EditorView.updateListener.of((update) => {
+    if (!update.selectionSet || !onSelectionChange) return;
+    const selection = update.state.selection.main;
+    onSelectionChange({
+      from: selection.from,
+      to: selection.to,
+      text: update.state.sliceDoc(selection.from, selection.to),
+    });
+  }), [onSelectionChange]);
+
   return (
     <CodeMirror
       ref={editorRef}
@@ -135,6 +147,7 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [] }
         syntaxHighlighting(customHighlighting),
         StreamLanguage.define(stex),
         linter(lintSource),
+        selectionListener,
         EditorView.lineWrapping
       ]}
       onChange={onChange}

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const net = require("node:net");
@@ -14,6 +14,7 @@ let localServerUrl;
 let isFirstLaunch = false;
 let workspaceMenuState = { autoSave: true, autoCompile: true };
 const onboardingWindowSize = { width: 1100, height: 800, minWidth: 960, minHeight: 700 };
+const DEFAULT_AI_MODEL = "gpt-5-mini";
 
 function sendWorkspaceCommand(command) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -117,6 +118,104 @@ function getWorkspacePreferencesPath() {
 
 function getOnboardingPreferencesPath() {
   return path.join(app.getPath("userData"), "onboarding.json");
+}
+
+function getAiAssistantPreferencesPath() {
+  return path.join(app.getPath("userData"), "ai-assistant.json");
+}
+
+function normalizeAiModel(model) {
+  if (typeof model !== "string") return DEFAULT_AI_MODEL;
+  const trimmed = model.trim();
+  return /^[a-zA-Z0-9._:-]{1,100}$/.test(trimmed) ? trimmed : DEFAULT_AI_MODEL;
+}
+
+async function readAiAssistantPreferences() {
+  try {
+    const preferences = JSON.parse(await fs.readFile(getAiAssistantPreferencesPath(), "utf8"));
+    return {
+      model: normalizeAiModel(preferences?.model),
+      encryptedApiKey: typeof preferences?.encryptedApiKey === "string" ? preferences.encryptedApiKey : "",
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { model: DEFAULT_AI_MODEL, encryptedApiKey: "" };
+    throw new Error("Quire could not read the AI Assistant settings.");
+  }
+}
+
+function getAiAssistantKey(preferences) {
+  if (!preferences.encryptedApiKey) throw new Error("Add your OpenAI API key in Settings before using the AI Assistant.");
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("macOS Keychain is not available, so Quire cannot securely use an AI API key.");
+  }
+
+  try {
+    return safeStorage.decryptString(Buffer.from(preferences.encryptedApiKey, "base64"));
+  } catch {
+    throw new Error("Quire could not read your saved AI API key. Add it again in Settings.");
+  }
+}
+
+function writingAssistantInstructions(mode) {
+  const task = {
+    improve: "Improve clarity, flow, and precision while preserving the writer's meaning and voice.",
+    correct: "Correct grammar, punctuation, spelling, and clear language issues while preserving the writer's meaning and voice.",
+    shorten: "Make the passage more concise while preserving its important meaning and voice.",
+    explain: "Give concise editorial feedback about clarity, grammar, and structure. Do not rewrite the passage.",
+  }[mode];
+
+  if (!task) throw new Error("Choose a valid AI Assistant action.");
+
+  return `You are Quire's writing assistant. ${task}
+
+Follow these principles:
+- Keep the writing recognizably human and specific to the writer; do not flatten it into generic prose.
+- Create original wording from scratch. Do not imitate a named author or reproduce text from a source.
+- Never claim to have checked plagiarism, AI detection, citations, or factual accuracy. You cannot verify any of those from this passage alone.
+- Do not invent quotations, sources, facts, statistics, or citations.
+- Do not help disguise copied work or evade academic-integrity or AI-detection systems.
+- Work only with the passage the writer deliberately selected.
+
+${mode === "explain"
+  ? "Return short, practical feedback in bullets."
+  : "Return only the complete revised passage. Do not add a preface, explanation, quotation marks, or Markdown."}`;
+}
+
+async function requestWritingAssistance({ selection, mode }) {
+  if (typeof selection !== "string" || !selection.trim()) {
+    throw new Error("Select the passage you want help with first.");
+  }
+  if (selection.length > 18000) {
+    throw new Error("Select a shorter passage (up to 18,000 characters) for one AI request.");
+  }
+
+  const preferences = await readAiAssistantPreferences();
+  const apiKey = getAiAssistantKey(preferences);
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: preferences.model,
+      store: false,
+      max_output_tokens: 900,
+      instructions: writingAssistantInstructions(mode),
+      input: selection,
+    }),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "The AI Assistant could not complete that request.");
+  }
+
+  const output = typeof payload?.output_text === "string"
+    ? payload.output_text.trim()
+    : "";
+  if (!output) throw new Error("The AI Assistant returned an empty response. Try again.");
+  return { output };
 }
 
 async function markFirstLaunchComplete() {
@@ -374,6 +473,35 @@ app.whenReady().then(async () => {
   ipcMain.handle("quire:set-window-appearance", (_event, appearance) => {
     if (appearance === "light" || appearance === "dark") setWindowAppearance(appearance);
   });
+
+  ipcMain.handle("quire:get-ai-settings", async () => {
+    const preferences = await readAiAssistantPreferences();
+    return {
+      model: preferences.model,
+      keyConfigured: Boolean(preferences.encryptedApiKey),
+    };
+  });
+
+  ipcMain.handle("quire:save-ai-settings", async (_event, input) => {
+    const current = await readAiAssistantPreferences();
+    const model = normalizeAiModel(input?.model);
+    let encryptedApiKey = current.encryptedApiKey;
+
+    if (input?.removeApiKey === true) {
+      encryptedApiKey = "";
+    } else if (typeof input?.apiKey === "string" && input.apiKey.trim()) {
+      if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error("macOS Keychain is not available, so Quire cannot securely save an AI API key.");
+      }
+      encryptedApiKey = safeStorage.encryptString(input.apiKey.trim()).toString("base64");
+    }
+
+    await fs.mkdir(app.getPath("userData"), { recursive: true });
+    await fs.writeFile(getAiAssistantPreferencesPath(), JSON.stringify({ model, encryptedApiKey }, null, 2));
+    return { model, keyConfigured: Boolean(encryptedApiKey) };
+  });
+
+  ipcMain.handle("quire:assist-writing", async (_event, input) => requestWritingAssistance(input || {}));
 
   ipcMain.on("quire:set-menu-state", (_event, state) => {
     if (typeof state?.autoSave === "boolean") workspaceMenuState.autoSave = state.autoSave;

@@ -1,16 +1,17 @@
-# Quire 0.2.4 — Startup reliability patch
+# Quire 0.2.5 — Quire Draft, on your terms
 
 Quire is a free, open-source, local-first workspace for writing and compiling LaTeX on your Mac. Your projects, PDFs, and builds stay on your computer—there is no account, cloud workspace, remote compiler, analytics, or paid tier.
 
-## Fixed in 0.2.4
+## What’s new in 0.2.5
 
-- **Reliable startup** — Fixed a regression in 0.2.3 that could show “The bundled Quire server did not start” immediately after opening the app.
-- **One Quire, no stray Dock app** — The local workspace server now runs through Electron’s non-Dock helper executable, so Quire launches normally without a second `exec` app beside it.
+- **Any request, not just presets** — Select a passage, write exactly what you want Quire Draft to do, and send that request without choosing Improve, Fix errors, Shorten, or Review. Quick actions remain available when you want them.
+- **A real editor preview** — Suggested text now opens in a read-only Quire Draft preview inside the editor, with a clear banner and highlighted changed passage. Apply commits it; Reject restores your untouched source.
+- **Reliable startup retained** — The bundled local server runs through Electron’s helper process, avoiding the 0.2.3 startup regression and the stray `exec` Dock app.
 
 ## Download
 
-- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.4-arm64.dmg`.
-- **Intel Mac**: download `Quire-0.2.4-x64.dmg`.
+- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.5-arm64.dmg`.
+- **Intel Mac**: download `Quire-0.2.5-x64.dmg`.
 
 ## Install Quire
 

@@ -396,6 +396,15 @@ export default function Workspace() {
     }
   }, [params.projectId, project, setProject]);
 
+  const setAutoCompileEnabled = useCallback((enabled: boolean) => {
+    // Auto-compile depends on saving the source first. The visible control and
+    // the native File menu intentionally call this same setter so they cannot
+    // fall out of sync on macOS or Windows.
+    void updateProjectSettings(enabled
+      ? { autoSave: true, autoCompile: true }
+      : { autoCompile: false });
+  }, [updateProjectSettings]);
+
   const moveProjectItem = useCallback(async (from: string, destinationFolder: string) => {
     try {
       const response = await fetch(`/api/projects/${params.projectId}/files`, {
@@ -636,13 +645,11 @@ export default function Workspace() {
             : { autoSave: false, autoCompile: false });
           break;
         case "set-auto-compile":
-          void updateProjectSettings(command.enabled
-            ? { autoSave: true, autoCompile: true }
-            : { autoCompile: false });
+          setAutoCompileEnabled(command.enabled);
           break;
       }
     });
-  }, [compileProject, downloadPdf, isDirty, saveDirtyFiles, toggleExplorer, updateProjectSettings]);
+  }, [compileProject, downloadPdf, isDirty, saveDirtyFiles, setAutoCompileEnabled, toggleExplorer, updateProjectSettings]);
 
   useEffect(() => {
     const autoSave = project?.autoSave;
@@ -749,19 +756,19 @@ export default function Workspace() {
         
         <div className="flex items-center gap-4 text-[13px]">
           {/* Custom Auto-Compile Switch */}
-          <label className="hidden md:flex items-center gap-2 cursor-pointer text-[var(--quire-muted)] hover:text-[var(--quire-text)] transition-colors duration-150 ease-out">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={Boolean(project?.autoCompile)}
+            onClick={() => setAutoCompileEnabled(!project?.autoCompile)}
+            className="hidden md:flex items-center gap-2 text-[var(--quire-muted)] hover:text-[var(--quire-text)] transition-colors duration-150 ease-out"
+            title={project?.autoCompile ? "Turn off auto compile" : "Turn on auto compile"}
+          >
             <span className="text-[11px] font-semibold">Auto compile</span>
-            <div className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer"
-                checked={project?.autoCompile || false} 
-                disabled={!project?.autoSave}
-                onChange={(e) => void updateProjectSettings({ autoCompile: e.target.checked, autoSave: e.target.checked || project?.autoSave })}
-              />
-              <div className="w-8 h-[18px] bg-[var(--quire-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[14px] after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[var(--quire-red)] shadow-inner"></div>
-            </div>
-          </label>
+            <span className={`relative inline-flex h-[18px] w-8 rounded-full shadow-inner transition-colors ${project?.autoCompile ? "bg-[var(--quire-red)]" : "bg-[var(--quire-border)]"}`}>
+              <span className={`absolute top-[3px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${project?.autoCompile ? "translate-x-[17px]" : "translate-x-[3px]"}`} />
+            </span>
+          </button>
 
           {/* Recompile Button */}
           <button 
@@ -1054,6 +1061,7 @@ export default function Workspace() {
                   url={visibleAssistantProposal ? `/api/projects/${params.projectId}/draft-preview?token=${encodeURIComponent(visibleAssistantProposal.id)}` : previewedAsset?.kind === "pdf" ? `/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}` : `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
                   documentName={visibleAssistantProposal ? "Quire Draft preview.pdf" : previewedAsset?.kind === "pdf" ? previewedAsset.path.split("/").pop() : undefined}
                   onDownload={visibleAssistantProposal || previewedAsset?.kind === "pdf" ? undefined : () => void downloadPdf()}
+                  isCompiling={isCompiling}
                 />
               </div>
             )}

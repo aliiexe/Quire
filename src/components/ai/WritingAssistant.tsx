@@ -14,7 +14,7 @@ type AssistantMode = "improve" | "correct" | "shorten" | "explain" | "custom" | 
 
 type DesktopAiBridge = {
   getAiSettings?: () => Promise<{ providerLabel: string; model: string; keyConfigured: boolean }>;
-  assistWriting?: (input: { selection: string; mode: AssistantMode; instruction?: string }) => Promise<{ output: string }>;
+  assistWriting?: (input: { selection: string; mode: AssistantMode; instruction?: string }) => Promise<{ output?: string; ok?: boolean; error?: string }>;
   onOpenDraftForSelection?: (listener: (payload: { text?: string }) => void) => () => void;
 };
 
@@ -118,6 +118,9 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
     setOutput("");
     try {
       const result = await bridge.assistWriting({ selection: requestText, mode: nextMode, instruction: isDraft ? undefined : instruction.trim() || undefined });
+      if (result.ok === false || !result.output) {
+        throw new Error(result.error || "Quire Draft returned an empty response. Try again.");
+      }
       setOutput(result.output);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Quire Draft could not complete that request.");

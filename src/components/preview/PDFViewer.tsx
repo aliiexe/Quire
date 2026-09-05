@@ -10,6 +10,7 @@ interface PDFViewerProps {
   url: string | null;
   onDownload?: () => void;
   documentName?: string;
+  isCompiling?: boolean;
 }
 
 interface PageDimensions {
@@ -22,7 +23,7 @@ interface PdfRenderTask {
   cancel: () => void;
 }
 
-export function PDFViewer({ url, onDownload, documentName }: PDFViewerProps) {
+export function PDFViewer({ url, onDownload, documentName, isCompiling = false }: PDFViewerProps) {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -126,6 +127,19 @@ export function PDFViewer({ url, onDownload, documentName }: PDFViewerProps) {
   const fitScale = baseDimensions ? availableWidth / baseDimensions.width : 1;
   const currentScale = fitScale * scale;
   const isFitWidth = scale === 1;
+
+  if (isCompiling) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-[var(--quire-pdf-bg)] px-6 text-center" role="status" aria-live="polite">
+        <span className="relative grid h-12 w-12 place-items-center rounded-2xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]">
+          <span className="absolute inset-0 animate-ping rounded-2xl bg-[var(--quire-red)]/15" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        </span>
+        <p className="mt-4 text-sm font-semibold text-[var(--quire-text)]">Compiling locally…</p>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--quire-muted)]">Quire is building your PDF on this computer. The first build can take a moment while your LaTeX distribution prepares its packages.</p>
+      </div>
+    );
+  }
 
   if (!url || loadError) {
     return (

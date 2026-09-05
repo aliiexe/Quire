@@ -123,10 +123,10 @@ Set up a Developer ID Application certificate and Apple notarization credentials
 
 Import this repository into Vercel as a Next.js project. The public privacy-policy route is included automatically at `/privacy`.
 
-In **Vercel → Settings → Environment Variables**, set `NEXT_PUBLIC_QUIRE_WEBSITE_URL` to the final production URL, for example `https://quire.vercel.app` or your custom domain. Redeploy after changing it. The macOS app then opens that URL in the user&apos;s default browser, and the App Store privacy-policy URL will be:
+In **Vercel → Settings → Environment Variables**, set `NEXT_PUBLIC_QUIRE_WEBSITE_URL` to `https://quire-app.vercel.app` (or your custom domain). Redeploy after changing it. The macOS app then opens that URL in the user&apos;s default browser, and the App Store privacy-policy URL will be:
 
 ```text
-https://your-domain.example/privacy
+https://quire-app.vercel.app/privacy
 ```
 
 ## Everyday workflow

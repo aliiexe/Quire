@@ -6,6 +6,7 @@ const faqs = [
   ["Does Quire need an internet connection?", "No. Quire is designed around a local workspace. Your project files, compiler, and preview run on your own machine."],
   ["Can I use an existing LaTeX project?", "Yes. Keep the folder structure you already use, or import an archive into a new Quire project and continue from there."],
   ["What does auto compile do?", "When it is enabled, Quire saves your changes and runs a local build after a short pause, then refreshes the preview when the build succeeds."],
+  ["How does AI Assistant handle my writing?", "It is optional and uses your own OpenAI API key. You choose the exact passage and action, then review its suggestion before applying it. Quire never sends an entire project automatically or rewrites in the background."],
   ["Is Quire really free?", "Yes. Quire is free and open source, with no paid plans, accounts, or required cloud service. Your projects stay on your Mac."],
 ];
 

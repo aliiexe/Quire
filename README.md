@@ -41,7 +41,7 @@ Your project files remain ordinary files in a local workspace. Compiles use your
 - **A dedicated PDF reader** — Continuous pages, zoom, fit width, page controls, download, and safe handling of rapid rebuilds.
 - **Project-friendly imports** — Start from a blank template or bring in an existing ZIP archive without changing its structure.
 - **Light and dark appearances** — A warm, restrained interface with a persistent appearance preference.
-- **Optional AI Assistant** — Bring your own OpenAI API key for deliberate, selected-text writing help; each suggestion remains yours to review before it changes the document.
+- **Optional AI Assistant** — A thoughtful second set of eyes. Bring your own OpenAI API key for deliberate, selected-text writing help; each suggestion remains yours to review before it changes the document.
 - **A responsive product site** — Learn about Quire on any screen size, then open the local workspace when you are ready to write.
 
 ## Quick start

@@ -1,4 +1,4 @@
-# Quire 0.2.0 — macOS Preview
+# Quire 0.2.1 — macOS Preview
 
 Quire is a free, open-source, local-first workspace for writing and compiling LaTeX on your Mac. Your projects, PDFs, and builds stay on your computer—there is no account, cloud workspace, remote compiler, analytics, or paid tier.
 
@@ -9,8 +9,8 @@ Quire is a free, open-source, local-first workspace for writing and compiling La
 
 ## Download
 
-- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.0-arm64.dmg`.
-- **Intel Mac**: download `Quire-0.2.0-x64.dmg`.
+- **Apple Silicon** (M1, M2, M3, M4, and newer): download `Quire-0.2.1-arm64.dmg`.
+- **Intel Mac**: download `Quire-0.2.1-x64.dmg`.
 
 ## Install Quire
 

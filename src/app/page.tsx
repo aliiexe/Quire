@@ -3,6 +3,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { EditorStory } from "@/components/marketing/EditorStory";
 import { PreviewStory } from "@/components/marketing/PreviewStory";
 import { AutoCompileStory } from "@/components/marketing/AutoCompileStory";
+import { AIAssistantStory } from "@/components/marketing/AIAssistantStory";
 import { LocalFirst } from "@/components/marketing/LocalFirst";
 import { FeatureBento } from "@/components/marketing/FeatureBento";
 import { OpenSource } from "@/components/marketing/OpenSource";
@@ -24,6 +25,7 @@ export default function MarketingPage() {
           <EditorStory />
           <PreviewStory />
           <AutoCompileStory />
+          <AIAssistantStory />
           <LocalFirst />
           <FeatureBento />
           <OpenSource />

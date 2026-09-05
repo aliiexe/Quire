@@ -4,7 +4,7 @@ Quire is a free, open-source, local-first workspace for writing and compiling La
 
 ## What’s new
 
-- **Optional AI Assistant** — Bring your own OpenAI, Anthropic, or OpenRouter API key for selected-text writing help. Every suggestion stays reviewable; Quire never changes your document in the background or uploads an entire project.
+- **Quire Draft (optional)** — Bring your own provider key—direct, through OpenRouter, or via a compatible API—to refine selected text or create a complete LaTeX draft from a brief. Every result stays reviewable; Quire never changes your document in the background or uploads an entire project.
 - **A clearer workspace story** — The website now uses expressive editor, save, compile, and preview marks in place of the numbered Source & Output sequence.
 
 ## Download
@@ -26,7 +26,7 @@ If that happens, try opening Quire once, then open **System Settings → Privacy
 
 ## Privacy and support
 
-Quire works locally on your Mac. The optional AI Assistant is off until you configure your own OpenAI, Anthropic, or OpenRouter API key and ask it to work on selected text. Read the privacy policy at https://quire-app.vercel.app/privacy.
+Quire works locally on your Mac. Quire Draft is off until you configure your own provider API key and deliberately send it selected text or a writing brief. Read the privacy policy at https://quire-app.vercel.app/privacy.
 
 Support: alibourak.work@gmail.com
 

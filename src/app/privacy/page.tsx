@@ -33,7 +33,7 @@ export default function PrivacyPolicyPage() {
           <div className="mt-12 space-y-10 text-[15px] leading-7 text-[var(--quire-text-secondary)] sm:text-base">
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">The short version</h2>
-              <p className="mt-3">Quire is a local-first macOS application. Your writing, project files, generated PDFs, and compiler output stay on your Mac in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app. Its optional AI Assistant is off until you add your own API key and deliberately request help with selected text.</p>
+              <p className="mt-3">Quire is a local-first macOS application. Your writing, project files, generated PDFs, and compiler output stay on your Mac in the workspace folder you choose. Quire has no account system, cloud sync, remote compiler, advertising, analytics, or telemetry built into the app. Quire Draft is optional and off until you add your own API key and deliberately request help with selected text or a writing brief.</p>
             </section>
 
             <section>
@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Information we do not collect</h2>
-              <p className="mt-3">The desktop app does not require a sign-in, collect your name or email address, track how you use the app, or send diagnostic or usage data to Quire. It does not sell or share personal information because it does not collect it. Quire does not transmit your project content unless you deliberately use the optional AI Assistant as described below.</p>
+              <p className="mt-3">The desktop app does not require a sign-in, collect your name or email address, track how you use the app, or send diagnostic or usage data to Quire. It does not sell or share personal information because it does not collect it. Quire does not transmit your project content unless you deliberately use Quire Draft as described below.</p>
             </section>
 
             <section>
@@ -52,8 +52,8 @@ export default function PrivacyPolicyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Optional AI Assistant</h2>
-              <p className="mt-3">AI Assistant is disabled by default. If you choose to configure it, you provide your own OpenAI, Anthropic, or OpenRouter API key. Quire encrypts each saved key using macOS Keychain and does not show it back to you. When you explicitly choose an AI action, Quire sends only the passage you selected and the requested editing action to your selected provider. It does not automatically send an entire project, compile output, or other files.</p>
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Optional Quire Draft</h2>
+              <p className="mt-3">Quire Draft is disabled by default. If you choose to configure it, you provide your own API key for the provider you select, including direct providers, OpenRouter, or a compatible endpoint. Quire encrypts each saved key using macOS Keychain and does not show it back to you. When you explicitly choose a Quire Draft action, Quire sends only the passage you selected or writing brief you entered, together with the requested action, to your selected provider. It does not automatically send an entire project, compile output, or other files.</p>
               <p className="mt-3">Your selected provider processes any text you send under your own account and its applicable terms and data policies. If you use OpenRouter, its routing may send that text to the model provider you choose. Quire cannot control any provider&apos;s services or policies. Do not send confidential, personal, or sensitive material unless you are comfortable with the chosen provider&apos;s handling of it.</p>
             </section>
 

@@ -419,7 +419,7 @@ export default function Dashboard() {
               </div>
               <Dialog.Close className="rounded-lg px-2 py-1 text-sm font-semibold text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]">Close</Dialog.Close>
             </div>
-            <p className="mt-4 text-sm leading-6 text-[var(--quire-text-secondary)]">Quire&apos;s writing, compiling, and PDF preview workflow runs on this device. It has no account system, cloud sync, telemetry pipeline, remote compiler, or background upload of your project content. The optional AI Assistant only connects when you add your own key and ask it to help with selected text.</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--quire-text-secondary)]">Quire&apos;s writing, compiling, and PDF preview workflow runs on this device. It has no account system, cloud sync, telemetry pipeline, remote compiler, or background upload of your project content. Optional Quire Draft only connects when you add your own key and deliberately send selected text or a writing brief.</p>
             <div className="mt-6 grid gap-3">
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
@@ -427,7 +427,7 @@ export default function Dashboard() {
               </div>
               <div className="flex gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
                 <CloudOff className="mt-0.5 h-5 w-5 shrink-0 text-[var(--quire-red)]" />
-                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your Mac to power the interface. The optional AI Assistant sends only selected text directly to your chosen provider when you request it.</p>
+                <p className="text-sm leading-5 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">No project cloud connection.</strong> Quire uses a local service on your Mac to power the interface. Optional Quire Draft sends only selected text or a writing brief directly to your chosen provider when you request it.</p>
               </div>
             </div>
             <p className="mt-5 text-xs leading-5 text-[var(--quire-muted)]">This is the in-app privacy summary. Read the full policy for the privacy contact and complete local-first data practices.</p>

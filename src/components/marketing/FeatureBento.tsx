@@ -3,9 +3,9 @@ import { FileOutput, FolderTree, PenLine, Sparkles, SunMoon } from "lucide-react
 const features = [
   { icon: PenLine, title: "A considered editor", description: "A calm CodeMirror surface, softened syntax, generous spacing, and tabs that belong to the document instead of the chrome." },
   { icon: FileOutput, title: "A real PDF preview", description: "Continuous pages, page tracking, zoom, fit width, and download in a reader designed to disappear behind the work." },
-  { icon: FolderTree, title: "A tidy project home", description: "Keep chapters, assets, and bibliography in a clean file explorer with persistent folder state and quiet, useful controls." },
+  { icon: FolderTree, title: "A tidy project home", description: "Keep chapters, assets, and bibliography in a clean file explorer. Upload images and PDFs, then read them in place without leaving the workspace." },
   { icon: SunMoon, title: "A workspace that adapts", description: "Light and dark appearances are designed as equals, with the same warmth, contrast, and familiar Quire red marker." },
-  { icon: Sparkles, title: "AI, on your terms", description: "Bring your own API key for selected-text help. Suggestions stay reviewable, preserve your voice, and never rewrite in the background." },
+  { icon: Sparkles, title: "Quire Draft", description: "Bring your own provider key to refine selected text or shape a complete LaTeX draft from a brief. Every result stays reviewable and in your control." },
 ];
 
 export function FeatureBento() {

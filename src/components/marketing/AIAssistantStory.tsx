@@ -2,7 +2,7 @@ import { KeyRound, MousePointer2, ShieldCheck, Sparkles, WandSparkles } from "lu
 import { QUIRE_MAC_DOWNLOAD_URL } from "@/lib/links";
 
 const promises = [
-  { icon: KeyRound, title: "Your key", body: "Connect your own OpenAI account in Settings. Quire never provides, sees, or reuses it." },
+  { icon: KeyRound, title: "Your provider", body: "Choose OpenAI, Anthropic, or OpenRouter in Settings. Quire never provides, sees, or reuses your key." },
   { icon: MousePointer2, title: "Only what you select", body: "Choose the passage and the task. Nothing else in the project is sent automatically." },
   { icon: ShieldCheck, title: "Always your decision", body: "Review every suggestion before it reaches the document. Your voice remains in charge." },
 ];

@@ -41,7 +41,7 @@ Your project files remain ordinary files in a local workspace. Compiles use your
 - **A dedicated PDF reader** — Continuous pages, zoom, fit width, page controls, download, and safe handling of rapid rebuilds.
 - **Project-friendly imports** — Start from a blank template or bring in an existing ZIP archive without changing its structure.
 - **Light and dark appearances** — A warm, restrained interface with a persistent appearance preference.
-- **Optional AI Assistant** — A thoughtful second set of eyes. Bring your own OpenAI API key for deliberate, selected-text writing help; each suggestion remains yours to review before it changes the document.
+- **Optional AI Assistant** — A thoughtful second set of eyes. Bring your own OpenAI, Anthropic, or OpenRouter API key for deliberate, selected-text writing help; a curated model picker includes OpenRouter's free route and every suggestion remains yours to review before it changes the document.
 - **A responsive product site** — Learn about Quire on any screen size, then open the local workspace when you are ready to write.
 
 ## Quick start
@@ -192,7 +192,7 @@ Quire's core workflow runs on your machine:
 - The TeX compiler is the one installed on your computer.
 - There is no built-in authentication, telemetry pipeline, or cloud-sync requirement.
 
-The optional AI Assistant is disabled until you add your own OpenAI API key. When you explicitly ask it to help, Quire sends only the passage you selected and the requested editing action to OpenAI under your own account; it never automatically uploads a project. The key is stored with macOS Keychain. Read the complete policy at [quire-app.vercel.app/privacy](https://quire-app.vercel.app/privacy).
+The optional AI Assistant is disabled until you add your own OpenAI, Anthropic, or OpenRouter API key. When you explicitly ask it to help, Quire sends only the passage you selected and the requested editing action to the provider you chose; it never automatically uploads a project. Saved keys are stored with macOS Keychain. OpenRouter's free route is subject to availability and provider limits. Read the complete policy at [quire-app.vercel.app/privacy](https://quire-app.vercel.app/privacy).
 
 As with any local development server, only run Quire on networks and machines you trust. See [SECURITY.md](SECURITY.md) for the current threat model and compiler safeguards.
 

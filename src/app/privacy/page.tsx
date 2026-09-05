@@ -53,8 +53,8 @@ export default function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--quire-text)]">Optional AI Assistant</h2>
-              <p className="mt-3">AI Assistant is disabled by default. If you choose to configure it, you provide your own OpenAI API key. Quire encrypts that key using macOS Keychain and does not show it back to you. When you explicitly choose an AI action, Quire sends only the passage you selected and the requested editing action directly to OpenAI&apos;s API. It does not automatically send an entire project, compile output, or other files.</p>
-              <p className="mt-3">OpenAI processes any selected text you send under your own OpenAI account and its applicable terms and data policies. Quire requests that the response not be stored by the API, but Quire cannot control the provider&apos;s services or policies. Do not send confidential, personal, or sensitive material unless you are comfortable with the provider&apos;s handling of it.</p>
+              <p className="mt-3">AI Assistant is disabled by default. If you choose to configure it, you provide your own OpenAI, Anthropic, or OpenRouter API key. Quire encrypts each saved key using macOS Keychain and does not show it back to you. When you explicitly choose an AI action, Quire sends only the passage you selected and the requested editing action to your selected provider. It does not automatically send an entire project, compile output, or other files.</p>
+              <p className="mt-3">Your selected provider processes any text you send under your own account and its applicable terms and data policies. If you use OpenRouter, its routing may send that text to the model provider you choose. Quire cannot control any provider&apos;s services or policies. Do not send confidential, personal, or sensitive material unless you are comfortable with the chosen provider&apos;s handling of it.</p>
             </section>
 
             <section>

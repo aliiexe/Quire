@@ -1,5 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } = require("electron");
-const { spawn } = require("node:child_process");
+const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell, utilityProcess } = require("electron");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -235,7 +234,7 @@ function getAiAssistantKey(preferences) {
   }
 }
 
-function writingAssistantInstructions(mode) {
+function writingAssistantInstructions(mode, additionalInstruction = "") {
   const task = {
     improve: "Improve clarity, flow, and precision while preserving the writer's meaning and voice.",
     correct: "Correct grammar, punctuation, spelling, and clear language issues while preserving the writer's meaning and voice.",
@@ -245,6 +244,9 @@ function writingAssistantInstructions(mode) {
   }[mode];
 
   if (!task) throw new Error("Choose a valid Quire Draft action.");
+  const writerDirection = additionalInstruction
+    ? `\n\nThe writer also added this direction. Follow it when it does not conflict with the principles above: ${additionalInstruction}`
+    : "";
 
   if (mode === "draft") {
     return `You are Quire Draft, a careful writing partner inside a local LaTeX editor. ${task}
@@ -256,7 +258,7 @@ Follow these principles:
 - Keep the document useful, specific, and recognizably human rather than generic.
 - Work only from the writer's deliberate brief.
 
-Return only complete LaTeX source, beginning with \\documentclass and ending with \\end{document}. Do not add Markdown fences, a preface, or explanation.`;
+Return only complete LaTeX source, beginning with \\documentclass and ending with \\end{document}. Do not add Markdown fences, a preface, or explanation.${writerDirection}`;
   }
 
   return `You are Quire Draft, a careful writing partner inside a local LaTeX editor. ${task}
@@ -271,7 +273,7 @@ Follow these principles:
 
 ${mode === "explain"
   ? "Return short, practical feedback in bullets."
-  : "Return only the complete revised passage. Do not add a preface, explanation, quotation marks, or Markdown."}`;
+  : "Return only the complete revised passage. Do not add a preface, explanation, quotation marks, or Markdown."}${writerDirection}`;
 }
 
 function extractChatCompletionText(payload) {
@@ -333,18 +335,21 @@ async function listAiModels({ provider: requestedProvider, apiKey: suppliedApiKe
   return { models: normalizeModelCatalog(payload?.data || payload?.models) };
 }
 
-async function requestWritingAssistance({ selection, mode }) {
+async function requestWritingAssistance({ selection, mode, instruction }) {
   if (typeof selection !== "string" || !selection.trim()) {
     throw new Error(mode === "draft" ? "Describe the document you want Quire Draft to create." : "Select the passage you want help with first.");
   }
   if (selection.length > 18000) {
     throw new Error("Select a shorter passage (up to 18,000 characters) for one AI request.");
   }
+  if (typeof instruction !== "undefined" && (typeof instruction !== "string" || instruction.trim().length > 2000)) {
+    throw new Error("Keep your additional direction under 2,000 characters.");
+  }
 
   const preferences = await readAiAssistantPreferences();
   if (!preferences.model) throw new Error("Choose a model in Settings before using Quire Draft.");
   const apiKey = getAiAssistantKey(preferences);
-  const instructions = writingAssistantInstructions(mode);
+  const instructions = writingAssistantInstructions(mode, typeof instruction === "string" ? instruction.trim() : "");
   const provider = AI_PROVIDERS[preferences.provider];
   const maxOutputTokens = mode === "draft" ? 4000 : 900;
   let response;
@@ -549,11 +554,12 @@ async function startLocalServer() {
 
   await fs.mkdir(workspacePath, { recursive: true });
 
-  nextServer = spawn(process.execPath, [serverPath], {
+  // A utility process is a background-only Electron child. Spawning Quire's
+  // executable directly made macOS advertise a second "exec" app in the Dock.
+  nextServer = utilityProcess.fork(serverPath, [], {
     cwd: runtimePath,
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
       PATH: macPath(),
@@ -561,9 +567,9 @@ async function startLocalServer() {
       QUIRE_WORKSPACE: workspacePath,
     },
     stdio: "ignore",
+    serviceName: "Quire local workspace",
   });
 
-  nextServer.unref();
   const url = `http://127.0.0.1:${port}`;
   await waitForServer(url);
   return url;
@@ -620,7 +626,7 @@ function createWindow() {
 }
 
 async function restartLocalServer() {
-  if (nextServer && !nextServer.killed) nextServer.kill();
+  if (nextServer) nextServer.kill();
   nextServer = undefined;
   localServerUrl = await startLocalServer();
 
@@ -828,5 +834,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (nextServer && !nextServer.killed) nextServer.kill();
+  if (nextServer) nextServer.kill();
 });

@@ -34,6 +34,14 @@ function assetKind(path: string): "image" | "pdf" | null {
 }
 
 type ProjectAsset = { path: string; kind: "image" | "pdf" };
+type AssistantProposal = {
+  filePath: string;
+  originalContent: string;
+  previewContent: string;
+  previewRange?: { from: number; to: number };
+  selection?: WritingSelection;
+  label: string;
+};
 
 type DesktopMenuCommand =
   | { type: "new-file" | "new-folder" | "save-all" | "recompile" | "export-pdf" | "toggle-explorer" }
@@ -64,13 +72,16 @@ export default function Workspace() {
   const [newFolderError, setNewFolderError] = useState("");
   const [previewedAsset, setPreviewedAsset] = useState<ProjectAsset | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isFileDropActive, setIsFileDropActive] = useState(false);
   const [assistantSelection, setAssistantSelection] = useState<WritingSelection | null>(null);
+  const [assistantProposal, setAssistantProposal] = useState<AssistantProposal | null>(null);
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
   const [unsavedAction, setUnsavedAction] = useState<{ type: "dashboard" } | { type: "close-file"; path: string } | null>(null);
   const explorerPanelRef = useRef<PanelImperativeHandle>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const workspaceDragDepthRef = useRef(0);
   const compileInFlightRef = useRef(false);
   const autoCompileWasEnabledRef = useRef(false);
   const automaticallyOpenedProjectRef = useRef<string | null>(null);
@@ -102,7 +113,7 @@ export default function Workspace() {
   }, [isExplorerCollapsed]);
   const { 
     project, tree, activeFile, openFiles, fileContents, isDirty, isSaving, isCompiling, pdfRevision, diagnostics,
-    setProject, setTree, setActiveFile, openFile, closeFile, forgetPath, updateFileContent, markSaved, setSaving, setCompiling, setDiagnostics, incrementPdfRevision
+    setProject, setTree, setActiveFile, openFile, closeFile, forgetPath, movePath, updateFileContent, markSaved, setSaving, setCompiling, setDiagnostics, incrementPdfRevision
   } = useWorkspaceStore();
 
   // Load project
@@ -242,6 +253,9 @@ export default function Workspace() {
   }, [handleSelectFile]);
 
   const handleEditorChange = (value: string) => {
+    // A Draft result is only a visual proposal until the writer explicitly
+    // accepts it from the review bar below the editor.
+    if (assistantProposal) return;
     if (activeFile) {
       updateFileContent(activeFile, value);
     }
@@ -251,29 +265,55 @@ export default function Workspace() {
     setAssistantSelection(selection.text ? selection : null);
   }, []);
 
-  const applyAssistantSuggestion = useCallback((replacement: string, selection: WritingSelection) => {
+  const previewAssistantSuggestion = useCallback((replacement: string, selection: WritingSelection) => {
     if (!activeFile || !replacement) return false;
+    if (assistantProposal) return false;
     const currentContent = fileContents[activeFile] || "";
     if (currentContent.slice(selection.from, selection.to) !== selection.text) return false;
 
-    updateFileContent(
-      activeFile,
-      `${currentContent.slice(0, selection.from)}${replacement}${currentContent.slice(selection.to)}`,
-    );
-    setAssistantSelection({ from: selection.from, to: selection.from + replacement.length, text: replacement });
+    const previewContent = `${currentContent.slice(0, selection.from)}${replacement}${currentContent.slice(selection.to)}`;
+    setAssistantProposal({
+      filePath: activeFile,
+      originalContent: currentContent,
+      previewContent,
+      previewRange: { from: selection.from, to: selection.from + replacement.length },
+      selection,
+      label: "Suggested revision",
+    });
     return true;
-  }, [activeFile, fileContents, updateFileContent]);
+  }, [activeFile, assistantProposal, fileContents]);
 
-  const replaceActiveDocumentFromDraft = useCallback((replacement: string) => {
+  const previewActiveDocumentFromDraft = useCallback((replacement: string) => {
     if (!activeFile || !isEditableTextFile(activeFile) || !replacement.trim()) return false;
-    updateFileContent(activeFile, replacement);
-    setAssistantSelection(null);
+    if (assistantProposal) return false;
+    setAssistantProposal({ filePath: activeFile, originalContent: fileContents[activeFile] || "", previewContent: replacement, label: "LaTeX draft" });
     setPreviewedAsset(null);
     return true;
-  }, [activeFile, updateFileContent]);
+  }, [activeFile, assistantProposal, fileContents]);
+
+  const acceptAssistantProposal = useCallback(() => {
+    if (!assistantProposal || assistantProposal.filePath !== activeFile) return;
+    if ((fileContents[activeFile] || "") !== assistantProposal.originalContent) {
+      setAssistantProposal(null);
+      return;
+    }
+    updateFileContent(activeFile, assistantProposal.previewContent);
+    if (assistantProposal.previewRange) {
+      const { from, to } = assistantProposal.previewRange;
+      setAssistantSelection({ from, to, text: assistantProposal.previewContent.slice(from, to) });
+    } else {
+      setAssistantSelection(null);
+    }
+    setAssistantProposal(null);
+  }, [activeFile, assistantProposal, fileContents, updateFileContent]);
+
+  const rejectAssistantProposal = useCallback(() => {
+    setAssistantProposal(null);
+  }, []);
 
   useEffect(() => {
     setAssistantSelection(null);
+    setAssistantProposal(null);
   }, [activeFile]);
 
   const hasDirtyFiles = Object.values(isDirty).some(Boolean);
@@ -300,6 +340,29 @@ export default function Workspace() {
       setProject(previousProject);
     }
   }, [params.projectId, project, setProject]);
+
+  const moveProjectItem = useCallback(async (from: string, destinationFolder: string) => {
+    try {
+      const response = await fetch(`/api/projects/${params.projectId}/files`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, destinationFolder }),
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.path !== "string") throw new Error(result.error || "Unable to move the item.");
+
+      const movedPath = result.path;
+      movePath(from, movedPath);
+      if (project?.rootFile === from || project?.rootFile.startsWith(`${from}/`)) {
+        const nextRootFile = `${movedPath}${project.rootFile.slice(from.length)}`;
+        await updateProjectSettings({ rootFile: nextRootFile });
+      }
+      await refreshTree();
+      setDiagnostics([{ severity: "info", message: `Moved “${from.split("/").pop()}” to “${destinationFolder}”.` }]);
+    } catch (error) {
+      setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "Unable to move the item." }]);
+    }
+  }, [movePath, params.projectId, project?.rootFile, refreshTree, setDiagnostics, updateProjectSettings]);
 
   const createFile = useCallback(async () => {
     const path = newFilePath.trim();
@@ -353,21 +416,26 @@ export default function Workspace() {
     }
   }, [newFolderPath, params.projectId, refreshTree, setDiagnostics]);
 
-  const uploadAsset = useCallback(async (file: File | undefined) => {
-    if (!file) return;
+  const uploadAssets = useCallback(async (files: Iterable<File>) => {
+    const uploads = Array.from(files).filter((file) => file.size > 0);
+    if (uploads.length === 0) return;
     setIsUploading(true);
     try {
-      const data = new FormData();
-      data.set("file", file);
-      const response = await fetch(`/api/projects/${params.projectId}/files`, { method: "POST", body: data });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Unable to upload the file.");
+      const uploadedPaths: string[] = [];
+      for (const file of uploads) {
+        const data = new FormData();
+        data.set("file", file);
+        const response = await fetch(`/api/projects/${params.projectId}/files`, { method: "POST", body: data });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `Unable to upload “${file.name}”.`);
+        uploadedPaths.push(typeof result.path === "string" ? result.path : `assets/${file.name}`);
+      }
 
       await refreshTree();
-      const uploadedPath = typeof result.path === "string" ? result.path : `assets/${file.name}`;
+      const uploadedPath = uploadedPaths[uploadedPaths.length - 1];
       const uploadedKind = assetKind(uploadedPath);
       if (uploadedKind) setPreviewedAsset({ path: uploadedPath, kind: uploadedKind });
-      setDiagnostics([{ severity: "info", message: `Uploaded “${file.name}” to assets.` }]);
+      setDiagnostics([{ severity: "info", message: uploads.length === 1 ? `Uploaded “${uploads[0].name}” to assets.` : `Uploaded ${uploads.length} files to assets.` }]);
     } catch (error) {
       setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "Unable to upload the file." }]);
     } finally {
@@ -375,6 +443,31 @@ export default function Workspace() {
       if (uploadInputRef.current) uploadInputRef.current.value = "";
     }
   }, [params.projectId, refreshTree, setDiagnostics]);
+
+  const acceptsFiles = (event: React.DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
+  const handleWorkspaceDragEnter = (event: React.DragEvent) => {
+    if (!acceptsFiles(event)) return;
+    event.preventDefault();
+    workspaceDragDepthRef.current += 1;
+    setIsFileDropActive(true);
+  };
+  const handleWorkspaceDragOver = (event: React.DragEvent) => {
+    if (!acceptsFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+  const handleWorkspaceDragLeave = (event: React.DragEvent) => {
+    if (!acceptsFiles(event)) return;
+    workspaceDragDepthRef.current = Math.max(0, workspaceDragDepthRef.current - 1);
+    if (workspaceDragDepthRef.current === 0) setIsFileDropActive(false);
+  };
+  const handleWorkspaceDrop = (event: React.DragEvent) => {
+    if (!acceptsFiles(event)) return;
+    event.preventDefault();
+    workspaceDragDepthRef.current = 0;
+    setIsFileDropActive(false);
+    void uploadAssets(event.dataTransfer.files);
+  };
 
   const requestDeleteNode = useCallback((node: ProjectNode) => {
     if (node.path === project?.rootFile) {
@@ -555,14 +648,26 @@ export default function Workspace() {
   }, [activeFile, compileProject, project?.autoCompile]);
   
   return (
-    <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden">
+    <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden" onDragEnter={handleWorkspaceDragEnter} onDragOver={handleWorkspaceDragOver} onDragLeave={handleWorkspaceDragLeave} onDrop={handleWorkspaceDrop}>
       <QuickOpen isOpen={isQuickOpen} onClose={() => setIsQuickOpen(false)} />
       <WritingAssistant
         selection={assistantSelection}
         activeFileName={activeFile}
-        onApply={applyAssistantSuggestion}
-        onReplaceDocument={replaceActiveDocumentFromDraft}
+        onPreviewSuggestion={previewAssistantSuggestion}
+        onPreviewDocument={previewActiveDocumentFromDraft}
       />
+      {assistantProposal && (
+        <aside className="fixed bottom-14 left-1/2 z-[60] flex w-[min(calc(100vw-2rem),38rem)] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-4 py-3 text-[var(--quire-text)] shadow-[0_18px_44px_rgba(0,0,0,.22)] backdrop-blur-xl" aria-label="Quire Draft suggestion review">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]">✦</span>
+            <div className="min-w-0"><p className="truncate text-sm font-semibold">{assistantProposal.label} preview</p><p className="text-xs text-[var(--quire-muted)]">Not saved until you apply it.</p></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={rejectAssistantProposal} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--quire-text-secondary)] transition-colors hover:bg-[var(--quire-hover)]">Reject</button>
+            <button type="button" onClick={acceptAssistantProposal} className="rounded-xl bg-[var(--quire-red)] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_7px_16px_rgba(255,0,0,.17)] transition-transform hover:-translate-y-px">Apply change</button>
+          </div>
+        </aside>
+      )}
       {/* Top Application Bar */}
       <header className="quire-workspace-header h-14 border-b border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_92%,transparent)] backdrop-blur-xl flex items-center justify-between px-4 sm:px-5 shrink-0 transition-colors duration-200 ease-out shadow-[0_1px_0_rgba(20,20,20,.02)]">
         <div className="flex items-center gap-3.5 min-w-0">
@@ -743,6 +848,7 @@ export default function Workspace() {
 
       {/* Main Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
+        {isFileDropActive && <div className="pointer-events-none absolute inset-3 z-[70] grid place-items-center rounded-2xl border-2 border-dashed border-[var(--quire-red)] bg-[color-mix(in_srgb,var(--quire-red-soft)_82%,transparent)] backdrop-blur-[2px]"><div className="rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-6 py-4 text-center shadow-[0_18px_44px_rgba(0,0,0,.16)]"><Upload className="mx-auto h-6 w-6 text-[var(--quire-red)]" /><p className="mt-2 text-sm font-semibold">Drop files to add them to this project</p><p className="mt-1 text-xs text-[var(--quire-muted)]">They will be saved locally in the assets folder.</p></div></div>}
         <PanelGroup orientation="horizontal">
           {/* Project Explorer */}
           <Panel 
@@ -764,7 +870,7 @@ export default function Workspace() {
               <div className="px-3.5 border-b border-[var(--quire-border)] text-[10px] font-semibold tracking-[.1em] uppercase text-[var(--quire-muted)] flex justify-between items-center h-10">
                 <span>Files</span>
                 <div className="flex items-center gap-0.5">
-                  <input ref={uploadInputRef} type="file" className="sr-only" onChange={(event) => void uploadAsset(event.target.files?.[0])} />
+                  <input ref={uploadInputRef} type="file" multiple className="sr-only" onChange={(event) => void uploadAssets(event.target.files || [])} />
                   <button type="button" title="Upload a file" aria-label="Upload a file" disabled={isUploading} onClick={() => uploadInputRef.current?.click()} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out disabled:cursor-wait disabled:opacity-50">
                     <Upload className={`w-3.5 h-3.5 ${isUploading ? "animate-pulse" : ""}`} />
                   </button>
@@ -786,6 +892,7 @@ export default function Workspace() {
                   onSelect={handleSelectFile} 
                   onDelete={requestDeleteNode}
                   onSetMainDocument={setMainDocument}
+                  onMove={moveProjectItem}
                 />
               </div>
             </div>
@@ -846,9 +953,10 @@ export default function Workspace() {
                   </div>
                 ) : activeFile ? (
                   <Editor 
-                    value={fileContents[activeFile] || ""} 
+                    value={assistantProposal?.filePath === activeFile ? assistantProposal.previewContent : fileContents[activeFile] || ""}
                     onChange={handleEditorChange} 
                     onSelectionChange={handleAssistantSelection}
+                    proposalRange={assistantProposal?.filePath === activeFile ? assistantProposal.previewRange : undefined}
                     diagnostics={diagnostics
                       .filter((diagnostic): diagnostic is LatexDiagnostic & { severity: "error" | "warning" } =>
                         (diagnostic.severity === "error" || diagnostic.severity === "warning") &&

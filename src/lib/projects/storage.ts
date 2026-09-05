@@ -48,6 +48,7 @@ export interface ProjectStorage {
   writeBinaryFile(projectId: string, path: string, content: Uint8Array): Promise<void>;
   createFile(projectId: string, path: string): Promise<void>;
   createDirectory(projectId: string, path: string): Promise<void>;
+  move(projectId: string, from: string, destinationDirectory: string): Promise<string>;
   rename(projectId: string, from: string, to: string): Promise<void>;
   remove(projectId: string, path: string): Promise<void>;
 }

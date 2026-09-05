@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { File, FileText, Image as ImageIcon, MoreVertical, ChevronRight, ChevronDown } from "lucide-react";
 import { ProjectNode } from "@/lib/projects/storage";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -11,11 +12,13 @@ interface ProjectTreeProps {
   onSelect: (path: string) => void;
   onDelete?: (node: ProjectNode) => void;
   onSetMainDocument?: (path: string) => void;
+  onMove?: (from: string, destinationFolder: string) => void;
   level?: number;
 }
 
-export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMainDocument, level = 0 }: ProjectTreeProps) {
+export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMainDocument, onMove, level = 0 }: ProjectTreeProps) {
   const { expandedFolders, toggleFolder, isDirty } = useWorkspaceStore();
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   
   if (!nodes || nodes.length === 0) return null;
 
@@ -33,14 +36,41 @@ export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMain
         const actuallyExpanded = isDir ? (expandedFolders[node.path] !== undefined ? expandedFolders[node.path] : level === 0) : false;
         const isSelected = node.path === selectedPath;
         const dirty = isDirty[node.path];
+        const isDropTarget = isDir && dropTarget === node.path;
 
         return (
           <div key={`${node.path}-${i}`} className="flex flex-col">
             <div 
               className={`flex items-center gap-2 h-[32px] px-2 cursor-pointer select-none group relative transition-all duration-150 ease-out
                 ${isSelected ? 'bg-[var(--quire-active-line)] text-[var(--quire-text)] font-medium' : 'text-[var(--quire-text-secondary)] hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]'}
+                ${isDropTarget ? 'bg-[var(--quire-red-soft)] text-[var(--quire-text)] ring-1 ring-inset ring-[var(--quire-red)]' : ''}
               `}
               style={{ paddingLeft: `${level * 12 + 8}px` }}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("application/x-quire-project-item", node.path);
+                event.dataTransfer.setData("text/plain", node.path);
+              }}
+              onDragEnd={() => setDropTarget(null)}
+              onDragOver={(event) => {
+                if (!isDir) return;
+                if (!Array.from(event.dataTransfer.types).includes("application/x-quire-project-item")) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTarget(node.path);
+              }}
+              onDragLeave={(event) => {
+                if (event.currentTarget === event.target) setDropTarget(null);
+              }}
+              onDrop={(event) => {
+                if (!isDir) return;
+                const source = event.dataTransfer.getData("application/x-quire-project-item");
+                setDropTarget(null);
+                if (!source || source === node.path || node.path.startsWith(`${source}/`)) return;
+                event.preventDefault();
+                onMove?.(source, node.path);
+              }}
               onClick={() => {
                 if (isDir) {
                   toggleFolder(node.path);
@@ -118,6 +148,7 @@ export function ProjectTree({ nodes, selectedPath, onSelect, onDelete, onSetMain
                     onSelect={onSelect}
                     onDelete={onDelete}
                     onSetMainDocument={onSetMainDocument}
+                    onMove={onMove}
                     level={level + 1}
                   />
                 </div>

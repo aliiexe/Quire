@@ -5,7 +5,7 @@ const features = [
   { icon: FileOutput, title: "A real PDF preview", description: "Continuous pages, page tracking, zoom, fit width, and download in a reader designed to disappear behind the work." },
   { icon: FolderTree, title: "A tidy project home", description: "Keep chapters, assets, and bibliography in a clean file explorer. Upload images and PDFs, then read them in place without leaving the workspace." },
   { icon: SunMoon, title: "A workspace that adapts", description: "Light and dark appearances are designed as equals, with the same warmth, contrast, and familiar Quire red marker." },
-  { icon: Sparkles, title: "Quire Draft", description: "Bring your own provider key to refine selected text or shape a complete LaTeX draft from a brief. Every result stays reviewable and in your control." },
+  { icon: Sparkles, title: "Quire Draft", description: "Bring your own provider key, add a direction to selected text, then preview every suggested change in the editor before you apply or reject it." },
 ];
 
 export function FeatureBento() {

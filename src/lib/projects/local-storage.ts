@@ -269,6 +269,39 @@ ${body}
     await fs.rename(fromPath, toPath);
   }
 
+  async move(projectId: string, from: string, destinationDirectory: string): Promise<string> {
+    const projectPath = this.getProjectPath(projectId);
+    const fromPath = getSafePath(projectPath, from);
+    const destinationPath = getSafePath(projectPath, destinationDirectory);
+    const relativeFrom = path.relative(projectPath, fromPath);
+    const relativeDestination = path.relative(projectPath, destinationPath);
+
+    if (relativeDestination === relativeFrom || relativeDestination.startsWith(`${relativeFrom}${path.sep}`)) {
+      throw new Error("A folder cannot be moved into itself.");
+    }
+
+    const destinationStat = await fs.stat(destinationPath);
+    if (!destinationStat.isDirectory()) throw new Error("Drop the item onto a folder.");
+
+    const targetPath = path.join(destinationPath, path.basename(fromPath));
+    if (targetPath === fromPath) throw new Error("That item is already in this folder.");
+    try {
+      await fs.stat(targetPath);
+      throw new Error("That folder already contains an item with this name.");
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "ENOENT") {
+        // The destination is free; continue with the move.
+      } else if (error instanceof Error && error.message === "That folder already contains an item with this name.") {
+        throw error;
+      } else {
+        throw error;
+      }
+    }
+
+    await fs.rename(fromPath, targetPath);
+    return path.relative(projectPath, targetPath);
+  }
+
   async remove(projectId: string, targetPath: string): Promise<void> {
     const projectPath = this.getProjectPath(projectId);
     const fullPath = getSafePath(projectPath, targetPath);

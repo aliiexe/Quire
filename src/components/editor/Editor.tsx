@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { StreamLanguage } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
-import { EditorView } from "@codemirror/view";
+import { Decoration, EditorView } from "@codemirror/view";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { linter, Diagnostic as CMLintDiagnostic } from "@codemirror/lint";
@@ -36,8 +36,16 @@ const editorTheme = EditorView.theme({
     borderLeftColor: "var(--quire-text)",
     borderLeftWidth: "2px"
   },
-  "&.cm-focused .cm-selectionBackground, ::selection": {
-    backgroundColor: "var(--quire-hover)"
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+    backgroundColor: "rgba(255, 0, 0, 0.30) !important"
+  },
+  ".cm-content ::selection": {
+    backgroundColor: "rgba(255, 0, 0, 0.36)",
+    color: "var(--quire-text)"
+  },
+  ".cm-quire-draft-preview": {
+    backgroundColor: "color-mix(in srgb, var(--quire-red) 13%, transparent)",
+    borderBottom: "2px solid var(--quire-red)"
   },
   ".cm-gutters": {
     backgroundColor: "var(--quire-editor)",
@@ -83,9 +91,10 @@ interface EditorProps {
   language?: "latex" | "markdown" | "text";
   diagnostics?: QuireDiagnostic[];
   onSelectionChange?: (selection: WritingSelection) => void;
+  proposalRange?: { from: number; to: number };
 }
 
-export function Editor({ value, onChange, language = "latex", diagnostics = [], onSelectionChange }: EditorProps) {
+export function Editor({ value, onChange, language = "latex", diagnostics = [], onSelectionChange, proposalRange }: EditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   useEffect(() => {
@@ -135,6 +144,11 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [], 
     });
   }), [onSelectionChange]);
 
+  const proposalPreview = useMemo(() => {
+    if (!proposalRange || proposalRange.from < 0 || proposalRange.to <= proposalRange.from || proposalRange.to > value.length) return null;
+    return EditorView.decorations.of(Decoration.set([Decoration.mark({ class: "cm-quire-draft-preview" }).range(proposalRange.from, proposalRange.to)]));
+  }, [proposalRange?.from, proposalRange?.to, value.length]);
+
   return (
     <CodeMirror
       ref={editorRef}
@@ -148,6 +162,7 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [], 
         StreamLanguage.define(stex),
         linter(lintSource),
         selectionListener,
+        ...(proposalPreview ? [proposalPreview] : []),
         EditorView.lineWrapping
       ]}
       onChange={onChange}

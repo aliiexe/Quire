@@ -51,6 +51,11 @@ const createItemSchema = z.object({
   kind: z.enum(["file", "folder"]).default("file"),
 });
 
+const moveItemSchema = z.object({
+  from: projectPathSchema,
+  destinationFolder: projectPathSchema,
+});
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
@@ -127,6 +132,28 @@ export async function POST(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to create the item";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const result = moveItemSchema.safeParse(await request.json());
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message || "Invalid move request" }, { status: 400 });
+    }
+
+    const { from, destinationFolder } = result.data;
+    if (destinationFolder === from || destinationFolder.startsWith(`${from}/`)) {
+      return NextResponse.json({ error: "A folder cannot be moved into itself." }, { status: 400 });
+    }
+
+    const movedPath = await storage.move((await params).projectId, from, destinationFolder);
+    return NextResponse.json({ success: true, path: movedPath });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error, "Unable to move the item") }, { status: 500 });
   }
 }
 

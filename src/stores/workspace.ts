@@ -23,6 +23,7 @@ interface WorkspaceState {
   openFile: (path: string, content: string) => void;
   closeFile: (path: string) => void;
   forgetPath: (path: string) => void;
+  movePath: (from: string, to: string) => void;
   updateFileContent: (path: string, content: string) => void;
   setSaving: (saving: boolean) => void;
   markSaved: (path: string) => void;
@@ -115,6 +116,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       : state.activeFile;
 
     return { openFiles, fileContents, isDirty, activeFile };
+  }),
+
+  movePath: (from, to) => set((state) => {
+    const move = (candidate: string) => candidate === from
+      ? to
+      : candidate.startsWith(`${from}/`)
+        ? `${to}${candidate.slice(from.length)}`
+        : candidate;
+    const remapRecord = <T,>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).map(([path, value]) => [move(path), value]));
+
+    return {
+      openFiles: state.openFiles.map(move),
+      fileContents: remapRecord(state.fileContents),
+      isDirty: remapRecord(state.isDirty),
+      expandedFolders: remapRecord(state.expandedFolders),
+      activeFile: state.activeFile ? move(state.activeFile) : null,
+    };
   }),
   
   updateFileContent: (path, content) => set((state) => ({

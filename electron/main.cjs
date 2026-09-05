@@ -241,6 +241,7 @@ function writingAssistantInstructions(mode, additionalInstruction = "") {
     correct: "Correct grammar, punctuation, spelling, and clear language issues while preserving the writer's meaning and voice.",
     shorten: "Make the passage more concise while preserving its important meaning and voice.",
     explain: "Give concise editorial feedback about clarity, grammar, and structure. Do not rewrite the passage.",
+    custom: "Carry out the writer's exact requested revision of the selected passage while preserving the parts they did not ask to change.",
     draft: "Create a complete, compile-ready LaTeX document from the writer's brief. Use the document type the writer asks for, or a conventional article when they do not specify one.",
   }[mode];
 
@@ -345,6 +346,9 @@ async function requestWritingAssistance({ selection, mode, instruction }) {
   }
   if (typeof instruction !== "undefined" && (typeof instruction !== "string" || instruction.trim().length > 2000)) {
     throw new Error("Keep your additional direction under 2,000 characters.");
+  }
+  if (mode === "custom" && (!instruction || !instruction.trim())) {
+    throw new Error("Write your request first, then Quire Draft can follow it.");
   }
 
   const preferences = await readAiAssistantPreferences();

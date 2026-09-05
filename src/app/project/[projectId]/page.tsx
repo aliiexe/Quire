@@ -646,6 +646,8 @@ export default function Workspace() {
       void compileProject();
     }
   }, [activeFile, compileProject, project?.autoCompile]);
+
+  const visibleAssistantProposal = assistantProposal?.filePath === activeFile ? assistantProposal : null;
   
   return (
     <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden" onDragEnter={handleWorkspaceDragEnter} onDragOver={handleWorkspaceDragOver} onDragLeave={handleWorkspaceDragLeave} onDrop={handleWorkspaceDrop}>
@@ -952,11 +954,15 @@ export default function Workspace() {
                     <div><p className="text-sm font-semibold">{previewedAsset.path.split("/").pop()}</p><p className="mt-1 max-w-xs text-sm leading-6 text-[var(--quire-muted)]">This PDF is open in the preview panel. Use its page controls and zoom to read it here.</p></div>
                   </div>
                 ) : activeFile ? (
-                  <Editor 
-                    value={assistantProposal?.filePath === activeFile ? assistantProposal.previewContent : fileContents[activeFile] || ""}
+                  <>
+                    {visibleAssistantProposal && <div className="flex shrink-0 items-center gap-2 border-b border-[var(--quire-red)]/30 bg-[var(--quire-red-soft)] px-4 py-2 text-xs text-[var(--quire-text-secondary)]"><span className="grid h-5 w-5 place-items-center rounded-md bg-[var(--quire-red)] text-[11px] text-white">✦</span><span><strong className="text-[var(--quire-text)]">Quire Draft preview</strong> — this is a temporary proposed change. Apply or reject it below.</span></div>}
+                    <Editor
+                    key={`${activeFile}:${visibleAssistantProposal ? "draft-preview" : "source"}`}
+                    value={visibleAssistantProposal ? visibleAssistantProposal.previewContent : fileContents[activeFile] || ""}
                     onChange={handleEditorChange} 
                     onSelectionChange={handleAssistantSelection}
-                    proposalRange={assistantProposal?.filePath === activeFile ? assistantProposal.previewRange : undefined}
+                    proposalRange={visibleAssistantProposal?.previewRange}
+                    readOnly={Boolean(visibleAssistantProposal)}
                     diagnostics={diagnostics
                       .filter((diagnostic): diagnostic is LatexDiagnostic & { severity: "error" | "warning" } =>
                         (diagnostic.severity === "error" || diagnostic.severity === "warning") &&
@@ -968,7 +974,8 @@ export default function Workspace() {
                         message: diagnostic.message,
                         severity: diagnostic.severity,
                       }))}
-                  />
+                    />
+                  </>
                 ) : (
                   <div className="flex items-center justify-center h-full text-sm text-[var(--quire-muted)]">
                     Select a file to edit

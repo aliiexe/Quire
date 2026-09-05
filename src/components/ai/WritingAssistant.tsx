@@ -10,7 +10,7 @@ export type WritingSelection = {
   text: string;
 };
 
-type AssistantMode = "improve" | "correct" | "shorten" | "explain" | "draft";
+type AssistantMode = "improve" | "correct" | "shorten" | "explain" | "custom" | "draft";
 
 type DesktopAiBridge = {
   getAiSettings?: () => Promise<{ providerLabel: string; model: string; keyConfigured: boolean }>;
@@ -28,7 +28,7 @@ interface WritingAssistantProps {
   onPreviewDocument: (replacement: string) => boolean;
 }
 
-const actions: Array<{ id: Exclude<AssistantMode, "draft">; label: string; description: string }> = [
+const actions: Array<{ id: Exclude<AssistantMode, "draft" | "custom">; label: string; description: string }> = [
   { id: "improve", label: "Improve", description: "Clarity and flow" },
   { id: "correct", label: "Fix errors", description: "Grammar and punctuation" },
   { id: "shorten", label: "Shorten", description: "Keep the meaning, use fewer words" },
@@ -79,6 +79,10 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
     const requestText = nextMode === "draft" ? brief.trim() : selection?.text.trim();
     if (!requestText) {
       setError(nextMode === "draft" ? "Describe the document you want to make first." : "Select the passage you want help with in the editor first.");
+      return;
+    }
+    if (nextMode === "custom" && !instruction.trim()) {
+      setError("Write your request first, then Quire Draft can follow it.");
       return;
     }
     if (!bridge?.assistWriting) {
@@ -166,21 +170,26 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
               <div className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">SELECTED TEXT</div>
               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[var(--quire-text-secondary)]">{selection?.text.trim() || "Select text in the editor before asking Quire Draft for help."}</p>
             </div>
-            <div className="mt-4">
-              <label htmlFor="quire-draft-instruction" className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">ADD A DIRECTION <span className="font-medium normal-case tracking-normal">(optional)</span></label>
-              <textarea id="quire-draft-instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} rows={3} placeholder="For example: keep the LaTeX commands exactly as they are, make it warmer, and keep the French academic tone." className="mt-2 w-full resize-y rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-3 text-sm leading-6 text-[var(--quire-text)] outline-none placeholder:text-[var(--quire-muted)] focus:border-[var(--quire-red)]" />
+            <div className="mt-4 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4">
+              <label htmlFor="quire-draft-instruction" className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">WRITE YOUR OWN REQUEST</label>
+              <textarea id="quire-draft-instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} rows={3} placeholder="For example: retain every LaTeX command, make this more confident, and keep the French academic tone." className="mt-2 w-full resize-y rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-3 text-sm leading-6 text-[var(--quire-text)] outline-none placeholder:text-[var(--quire-muted)] focus:border-[var(--quire-red)]" />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-sm text-xs leading-5 text-[var(--quire-muted)]">Send this on its own, or choose a quick action below to use it as extra guidance.</p>
+                <button type="button" disabled={working || !selection?.text.trim() || !instruction.trim()} onClick={() => void requestAssistance("custom")} className="inline-flex items-center gap-2 rounded-xl bg-[var(--quire-red)] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(255,0,0,.16)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45"><Sparkles className="h-3.5 w-3.5" />Send my request</button>
+              </div>
             </div>
           </>}
 
           {loadingSettings ? <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Checking your Quire Draft setup…</div> : !keyConfigured ? <div className="mt-5 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-red-soft)] p-4 text-sm leading-6 text-[var(--quire-text-secondary)]"><strong className="text-[var(--quire-text)]">Add your own API key first.</strong> Go to Settings → Quire Draft to securely add a {providerLabel} API key on this Mac.</div> : isDraft ? <div className="mt-5 flex justify-end"><button type="button" disabled={working || !brief.trim()} onClick={() => void requestAssistance("draft")} className="inline-flex items-center gap-2 rounded-xl bg-[var(--quire-red)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(255,0,0,.16)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45"><Sparkles className="h-4 w-4" />Create LaTeX draft</button></div> : <>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <div className="mt-5 text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">OR USE A QUICK ACTION</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {actions.map((action) => <button key={action.id} type="button" disabled={working || !selection?.text.trim()} onClick={() => void requestAssistance(action.id)} className={`rounded-xl border p-3.5 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45 ${mode === action.id ? "border-[var(--quire-red)] bg-[var(--quire-red-soft)]" : "border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] hover:border-[var(--quire-muted)]"}`}><div className="text-sm font-semibold">{action.label}</div><div className="mt-1 text-xs text-[var(--quire-muted)]">{action.description}</div></button>)}
             </div>
           </>}
 
           <p className="mt-4 text-xs leading-5 text-[var(--quire-muted)]">Quire Draft asks for original, voice-preserving writing and never claims to check plagiarism, citations, or AI detection. Your provider&apos;s data policy applies only to the text or brief you choose to send.</p>
 
-          {working && <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />{mode === "draft" ? "Shaping your LaTeX draft…" : "Considering the selected passage…"}</div>}
+          {working && <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />{mode === "draft" ? "Shaping your LaTeX draft…" : mode === "custom" ? "Following your direction…" : "Considering the selected passage…"}</div>}
           {error && <p role="alert" className="mt-5 text-sm leading-6 text-[var(--quire-red)]">{error}</p>}
           {notice && <p className="mt-5 flex items-center gap-1.5 text-sm text-[#5d875b]"><Check className="h-4 w-4" />{notice}</p>}
 

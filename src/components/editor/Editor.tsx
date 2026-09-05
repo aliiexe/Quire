@@ -92,9 +92,10 @@ interface EditorProps {
   diagnostics?: QuireDiagnostic[];
   onSelectionChange?: (selection: WritingSelection) => void;
   proposalRange?: { from: number; to: number };
+  readOnly?: boolean;
 }
 
-export function Editor({ value, onChange, language = "latex", diagnostics = [], onSelectionChange, proposalRange }: EditorProps) {
+export function Editor({ value, onChange, language = "latex", diagnostics = [], onSelectionChange, proposalRange, readOnly = false }: EditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   useEffect(() => {
@@ -153,9 +154,12 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [], 
     <CodeMirror
       ref={editorRef}
       value={value}
+      selection={proposalRange ? { anchor: proposalRange.from, head: proposalRange.to } : undefined}
       height="100%"
       className="h-full flex-1 text-base transition-all duration-150 ease-out"
       theme="none"
+      editable={!readOnly}
+      readOnly={readOnly}
       extensions={[
         editorTheme,
         syntaxHighlighting(customHighlighting),

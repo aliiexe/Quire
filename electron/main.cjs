@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell, utilityProcess } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } = require("electron");
+const { spawn } = require("node:child_process");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -554,12 +555,14 @@ async function startLocalServer() {
 
   await fs.mkdir(workspacePath, { recursive: true });
 
-  // A utility process is a background-only Electron child. Spawning Quire's
-  // executable directly made macOS advertise a second "exec" app in the Dock.
-  nextServer = utilityProcess.fork(serverPath, [], {
+  // Use Electron's helper executable rather than the Quire app executable.
+  // It runs this as a regular Node process without making macOS advertise a
+  // second Dock application, while retaining the runtime Next expects.
+  nextServer = spawn(process.helperExecPath, [serverPath], {
     cwd: runtimePath,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
       PATH: macPath(),
@@ -567,8 +570,8 @@ async function startLocalServer() {
       QUIRE_WORKSPACE: workspacePath,
     },
     stdio: "ignore",
-    serviceName: "Quire local workspace",
   });
+  nextServer.unref();
 
   const url = `http://127.0.0.1:${port}`;
   await waitForServer(url);

@@ -45,6 +45,7 @@ function installApplicationMenu() {
       label: "File",
       submenu: [
         { label: "New File…", accelerator: "CommandOrControl+N", click: () => sendWorkspaceCommand({ type: "new-file" }) },
+        { label: "New Folder…", accelerator: "CommandOrControl+Shift+N", click: () => sendWorkspaceCommand({ type: "new-folder" }) },
         { label: "Save All", accelerator: "CommandOrControl+S", click: () => sendWorkspaceCommand({ type: "save-all" }) },
         { type: "separator" },
         {
@@ -64,6 +65,25 @@ function installApplicationMenu() {
         { label: "Export PDF…", accelerator: "CommandOrControl+Shift+E", click: () => sendWorkspaceCommand({ type: "export-pdf" }) },
         { type: "separator" },
         { role: "close" },
+      ],
+    },
+    {
+      // Electron only wires the native macOS editing shortcuts when the
+      // corresponding edit roles are present in the application menu. Keep
+      // these as native roles so Cmd-X/C/V/Z/A work in CodeMirror, dialogs,
+      // and every other text field without bespoke clipboard code.
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "delete" },
+        { type: "separator" },
+        { role: "selectAll" },
       ],
     },
     {

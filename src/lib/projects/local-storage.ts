@@ -236,8 +236,16 @@ ${body}
   async createDirectory(projectId: string, dirPath: string): Promise<void> {
     const projectPath = this.getProjectPath(projectId);
     const targetPath = getSafePath(projectPath, dirPath);
-    
-    await fs.mkdir(targetPath, { recursive: true });
+
+    try {
+      await fs.stat(targetPath);
+      throw new Error("Folder already exists");
+    } catch (error: any) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.mkdir(targetPath);
   }
 
   async rename(projectId: string, from: string, to: string): Promise<void> {

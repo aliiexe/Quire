@@ -38,12 +38,17 @@ const writeSchema = z.object({
   content: z.string(),
 });
 
-const filePathSchema = z.string()
+const projectPathSchema = z.string()
   .trim()
   .min(1, "A file name is required")
   .max(260, "The file path is too long")
   .refine((value) => !value.startsWith("/") && !value.startsWith("\\"), "Use a path inside this project")
   .refine((value) => value.split(/[\\/]+/).every((part) => part && part !== "." && part !== ".." && !part.startsWith(".")), "Hidden and parent folders cannot be changed here");
+
+const createItemSchema = z.object({
+  path: projectPathSchema,
+  kind: z.enum(["file", "folder"]).default("file"),
+});
 
 export async function PUT(
   request: Request,
@@ -76,15 +81,20 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const result = filePathSchema.safeParse((await request.json()).path);
+    const result = createItemSchema.safeParse(await request.json());
     if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0]?.message || "Invalid file path" }, { status: 400 });
+      return NextResponse.json({ error: result.error.issues[0]?.message || "Invalid project path" }, { status: 400 });
     }
 
-    await storage.createFile((await params).projectId, result.data);
+    const projectId = (await params).projectId;
+    if (result.data.kind === "folder") {
+      await storage.createDirectory(projectId, result.data.path);
+    } else {
+      await storage.createFile(projectId, result.data.path);
+    }
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unable to create the file";
+    const message = error instanceof Error ? error.message : "Unable to create the item";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -94,7 +104,7 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const result = filePathSchema.safeParse(new URL(request.url).searchParams.get("path"));
+    const result = projectPathSchema.safeParse(new URL(request.url).searchParams.get("path"));
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0]?.message || "Invalid file path" }, { status: 400 });
     }

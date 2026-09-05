@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, PanelImperativeHandle } from "react-resizable-panels";
 import { useRef } from "react";
-import { FilePlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { QuireMark } from "@/components/brand/logo";
@@ -26,7 +26,7 @@ function isEditableTextFile(path: string) {
 }
 
 type DesktopMenuCommand =
-  | { type: "new-file" | "save-all" | "recompile" | "export-pdf" | "toggle-explorer" }
+  | { type: "new-file" | "new-folder" | "save-all" | "recompile" | "export-pdf" | "toggle-explorer" }
   | { type: "set-auto-save" | "set-auto-compile"; enabled: boolean };
 
 type DesktopBridge = {
@@ -49,6 +49,9 @@ export default function Workspace() {
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [newFileError, setNewFileError] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [newFolderPath, setNewFolderPath] = useState("");
+  const [newFolderError, setNewFolderError] = useState("");
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
   const [unsavedAction, setUnsavedAction] = useState<{ type: "dashboard" } | { type: "close-file"; path: string } | null>(null);
@@ -274,6 +277,32 @@ export default function Workspace() {
     }
   }, [handleSelectFile, newFilePath, params.projectId, refreshTree]);
 
+  const createFolder = useCallback(async () => {
+    const path = newFolderPath.trim().replace(/\/+$/, "");
+    if (!path) {
+      setNewFolderError("Give the folder a name first.");
+      return;
+    }
+
+    try {
+      setNewFolderError("");
+      const response = await fetch(`/api/projects/${params.projectId}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, kind: "folder" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to create the folder.");
+
+      await refreshTree();
+      setShowNewFolder(false);
+      setNewFolderPath("");
+      setDiagnostics([{ severity: "info", message: `Created folder “${path}”.` }]);
+    } catch (error) {
+      setNewFolderError(error instanceof Error ? error.message : "Unable to create the folder.");
+    }
+  }, [newFolderPath, params.projectId, refreshTree, setDiagnostics]);
+
   const requestDeleteNode = useCallback((node: ProjectNode) => {
     if (node.path === project?.rootFile) {
       setDiagnostics([{ severity: "error", message: "Choose another main document before deleting this file." }]);
@@ -363,6 +392,10 @@ export default function Workspace() {
         case "new-file":
           setNewFileError("");
           setShowNewFile(true);
+          break;
+        case "new-folder":
+          setNewFolderError("");
+          setShowNewFolder(true);
           break;
         case "save-all":
           void saveDirtyFiles(Object.keys(isDirty));
@@ -577,6 +610,38 @@ export default function Workspace() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      <Dialog.Root open={showNewFolder} onOpenChange={(open) => {
+        setShowNewFolder(open);
+        if (!open) {
+          setNewFolderPath("");
+          setNewFolderError("");
+        }
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(calc(100vw-2rem),27rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-5 shadow-[0_20px_60px_-15px_rgba(0,0,0,.25)] focus:outline-none">
+            <Dialog.Title className="text-lg font-semibold tracking-[-0.02em]">New folder</Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm leading-5 text-[var(--quire-muted)]">Create an empty folder inside this project. You can nest folders, for example <code className="rounded bg-[var(--quire-hover)] px-1 py-0.5">chapters/figures</code>.</Dialog.Description>
+            <form className="mt-5" onSubmit={(event) => { event.preventDefault(); void createFolder(); }}>
+              <label className="block text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="new-folder-path">Folder name</label>
+              <input
+                id="new-folder-path"
+                autoFocus
+                value={newFolderPath}
+                onChange={(event) => setNewFolderPath(event.target.value)}
+                placeholder="chapters"
+                className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--quire-red)]"
+              />
+              {newFolderError && <p className="mt-2 text-xs text-[var(--quire-red)]">{newFolderError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <Dialog.Close className="rounded-lg px-3 py-2 text-sm font-semibold text-[var(--quire-muted)] hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]">Cancel</Dialog.Close>
+                <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--quire-red)] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_5px_14px_rgba(255,0,0,.2)] hover:brightness-95"><FolderPlus className="h-4 w-4" />Create folder</button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <ConfirmationDialog
         open={Boolean(nodePendingDeletion)}
         onOpenChange={(open) => { if (!open) setNodePendingDeletion(null); }}
@@ -617,13 +682,16 @@ export default function Workspace() {
             className="bg-[var(--quire-surface-secondary)] transition-[flex-basis] duration-200 ease-in-out"
           >
             <div className="h-full flex flex-col border-r border-[var(--quire-border)] min-w-[200px]">
-              <div className="px-3.5 border-b border-[var(--quire-border)] text-[10px] font-semibold tracking-[.1em] uppercase text-[var(--quire-muted)] flex justify-between items-center h-10 group/explorerHeader">
+              <div className="px-3.5 border-b border-[var(--quire-border)] text-[10px] font-semibold tracking-[.1em] uppercase text-[var(--quire-muted)] flex justify-between items-center h-10">
                 <span>Files</span>
-                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/explorerHeader:opacity-100 focus-within:opacity-100">
-                  <button aria-label="Create a new file" onClick={() => { setNewFileError(""); setShowNewFile(true); }} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
+                <div className="flex items-center gap-0.5">
+                  <button type="button" title="New file (⌘N)" aria-label="Create a new file" onClick={() => { setNewFileError(""); setShowNewFile(true); }} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
                     <FilePlus className="w-3.5 h-3.5" />
                   </button>
-                  <button aria-label="Collapse file explorer" onClick={toggleExplorer} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
+                  <button type="button" title="New folder (⌘⇧N)" aria-label="Create a new folder" onClick={() => { setNewFolderError(""); setShowNewFolder(true); }} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
+                    <FolderPlus className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" aria-label="Collapse file explorer" onClick={toggleExplorer} className="p-1.5 hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)] rounded-[7px] text-[var(--quire-muted)] transition-all duration-150 ease-out">
                     <PanelLeftClose className="w-3.5 h-3.5" />
                   </button>
                 </div>

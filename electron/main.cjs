@@ -15,7 +15,7 @@ let isFirstLaunch = false;
 let workspaceMenuState = { autoSave: true, autoCompile: true };
 const onboardingWindowSize = { width: 1100, height: 800, minWidth: 960, minHeight: 700 };
 const AI_PROVIDERS = {
-  openrouter: { label: "OpenRouter", defaultModel: "openrouter/free", protocol: "openai-compatible", baseUrl: "https://openrouter.ai/api/v1" },
+  openrouter: { label: "OpenRouter", defaultModel: "z-ai/glm-5.2:free", protocol: "openai-compatible", baseUrl: "https://openrouter.ai/api/v1" },
   openai: { label: "OpenAI", defaultModel: "gpt-5-mini", protocol: "openai" },
   anthropic: { label: "Anthropic (Claude)", defaultModel: "claude-sonnet-5", protocol: "anthropic" },
   google: { label: "Google Gemini", defaultModel: "gemini-3.7-flash", protocol: "gemini" },
@@ -156,6 +156,9 @@ function defaultAiModel(provider) {
 function normalizeAiModel(model, provider) {
   if (typeof model !== "string") return defaultAiModel(provider);
   const trimmed = model.trim();
+  // Retire the rotating OpenRouter "free" route in favor of a model the user
+  // can identify and deliberately select in Quire Draft.
+  if (provider === "openrouter" && trimmed === "openrouter/free") return defaultAiModel(provider);
   return trimmed && /^[a-zA-Z0-9._~:/-]{1,180}$/.test(trimmed) ? trimmed : defaultAiModel(provider);
 }
 

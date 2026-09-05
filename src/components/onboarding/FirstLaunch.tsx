@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import * as Select from "@radix-ui/react-select";
 import {
   ArrowRight,
   Check,
+  ChevronDown,
   FileText,
   FolderHeart,
   Laptop,
@@ -359,14 +361,24 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
                   <input type="checkbox" checked={preferences.synctex} onChange={(event) => setPreferences((current) => ({ ...current, synctex: event.target.checked }))} />
                   <i aria-hidden="true" />
                 </label>
-                <label className="quire-onboarding__compiler-row">
+                <div className="quire-onboarding__compiler-row">
                   <span><FileText size={18} /><span><strong>Default compiler</strong><small>Used for new projects.</small></span></span>
-                  <select value={preferences.compiler} onChange={(event) => setPreferences((current) => ({ ...current, compiler: event.target.value as OnboardingPreferences["compiler"] }))}>
-                    <option value="pdflatex">pdfLaTeX</option>
-                    <option value="xelatex">XeLaTeX</option>
-                    <option value="lualatex">LuaLaTeX</option>
-                  </select>
-                </label>
+                  <Select.Root value={preferences.compiler} onValueChange={(compiler) => setPreferences((current) => ({ ...current, compiler: compiler as OnboardingPreferences["compiler"] }))}>
+                    <Select.Trigger className="quire-onboarding__select" aria-label="Default compiler">
+                      <Select.Value />
+                      <ChevronDown size={15} aria-hidden="true" />
+                    </Select.Trigger>
+                    <Select.Portal>
+                      <Select.Content position="popper" sideOffset={8} collisionPadding={16} className="quire-onboarding__select-content">
+                        <Select.Viewport>
+                          <Select.Item value="pdflatex" className="quire-onboarding__select-item"><Select.ItemText>pdfLaTeX</Select.ItemText><Select.ItemIndicator><Check size={14} /></Select.ItemIndicator></Select.Item>
+                          <Select.Item value="xelatex" className="quire-onboarding__select-item"><Select.ItemText>XeLaTeX</Select.ItemText><Select.ItemIndicator><Check size={14} /></Select.ItemIndicator></Select.Item>
+                          <Select.Item value="lualatex" className="quire-onboarding__select-item"><Select.ItemText>LuaLaTeX</Select.ItemText><Select.ItemIndicator><Check size={14} /></Select.ItemIndicator></Select.Item>
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select.Portal>
+                  </Select.Root>
+                </div>
               </div>
               <div className="quire-onboarding__actions">
                 <button type="button" className="quire-onboarding__secondary" onClick={() => moveTo("workspace")}>Back</button>

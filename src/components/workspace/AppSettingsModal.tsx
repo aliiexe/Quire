@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, KeyRound, Loader2, Monitor, Moon, ShieldCheck, Sparkles, Sun, X } from "lucide-react";
+import * as Select from "@radix-ui/react-select";
+import { Check, ChevronDown, KeyRound, Loader2, Monitor, Moon, ShieldCheck, Sparkles, Sun, X } from "lucide-react";
 
 type Appearance = "light" | "dark" | "system";
 type SettingsTab = "general" | "ai";
 type AiProvider = "openrouter" | "openai" | "anthropic" | "google" | "groq" | "deepseek" | "mistral" | "xai" | "cohere" | "perplexity" | "together" | "fireworks" | "cerebras" | "sambanova" | "custom";
 
-type ModelOption = { id: string; label: string };
+type ModelOption = { id: string; label: string; group?: string };
+type SelectGroup<T extends string> = { label: string; options: Array<{ value: T; label: string }> };
 
 type AiSettings = {
   provider: AiProvider;
@@ -31,7 +33,7 @@ const providers: Record<AiProvider, { label: string; keyLabel: string; keyPlaceh
     label: "OpenRouter",
     keyLabel: "OpenRouter API key",
     keyPlaceholder: "sk-or-v1-…",
-    keyHelp: "One key can access a broad model catalog. Its free router is subject to availability and provider limits.",
+    keyHelp: "Choose a named free model below, a paid model, or load the exact catalog available to your own key.",
   },
   openai: {
     label: "OpenAI",
@@ -66,11 +68,15 @@ const providers: Record<AiProvider, { label: string; keyLabel: string; keyPlaceh
 
 const curatedModels: Partial<Record<AiProvider, ModelOption[]>> = {
   openrouter: [
-    { id: "openrouter/free", label: "Free models router — $0 when available" },
-    { id: "openai/gpt-5", label: "GPT-5 — openai/gpt-5" },
-    { id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 — anthropic/claude-sonnet-5" },
-    { id: "google/gemini-3.7-flash", label: "Gemini 3.7 Flash — google/gemini-3.7-flash" },
-    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash — deepseek/deepseek-v4-flash" },
+    { id: "z-ai/glm-5.2:free", label: "Z.ai: GLM 5.2 — free", group: "Five named free models" },
+    { id: "google/gemma-4-31b-it:free", label: "Google: Gemma 4 31B — free", group: "Five named free models" },
+    { id: "nvidia/nemotron-3-ultra-550b-a55b:free", label: "NVIDIA: Nemotron 3 Ultra — free", group: "Five named free models" },
+    { id: "minimax/minimax-m2.7:free", label: "MiniMax: MiniMax M2.7 — free", group: "Five named free models" },
+    { id: "thinkingmachines/inkling:free", label: "Thinking Machines: Inkling — free", group: "Five named free models" },
+    { id: "openai/gpt-5", label: "OpenAI: GPT-5", group: "Popular paid models" },
+    { id: "anthropic/claude-sonnet-5", label: "Anthropic: Claude Sonnet 5", group: "Popular paid models" },
+    { id: "google/gemini-3.7-flash", label: "Google: Gemini 3.7 Flash", group: "Popular paid models" },
+    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash", group: "Popular paid models" },
   ],
   openai: [
     { id: "gpt-5", label: "GPT-5 — best overall" },
@@ -108,6 +114,59 @@ const curatedModels: Partial<Record<AiProvider, ModelOption[]>> = {
   ],
 };
 
+const providerGroups: SelectGroup<AiProvider>[] = [
+  {
+    label: "Direct APIs",
+    options: [
+      { value: "openai", label: "OpenAI" },
+      { value: "anthropic", label: "Anthropic (Claude)" },
+      { value: "google", label: "Google Gemini" },
+      { value: "mistral", label: "Mistral AI" },
+      { value: "xai", label: "xAI" },
+      { value: "cohere", label: "Cohere" },
+      { value: "perplexity", label: "Perplexity" },
+    ],
+  },
+  {
+    label: "Hosted model APIs",
+    options: [
+      { value: "openrouter", label: "OpenRouter" },
+      { value: "groq", label: "Groq" },
+      { value: "deepseek", label: "DeepSeek" },
+      { value: "together", label: "Together AI" },
+      { value: "fireworks", label: "Fireworks AI" },
+      { value: "cerebras", label: "Cerebras" },
+      { value: "sambanova", label: "SambaNova" },
+    ],
+  },
+  { label: "Bring your own endpoint", options: [{ value: "custom", label: "Custom OpenAI-compatible API" }] },
+];
+
+function PremiumSelect<T extends string>({ id, value, onValueChange, groups, ariaLabel }: { id: string; value: T; onValueChange: (value: T) => void; groups: SelectGroup<T>[]; ariaLabel: string }) {
+  const selected = groups.flatMap((group) => group.options).find((option) => option.value === value);
+  return (
+    <Select.Root value={value} onValueChange={(nextValue) => onValueChange(nextValue as T)}>
+      <Select.Trigger id={id} aria-label={ariaLabel} className="mt-2 flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 text-left text-sm font-medium text-[var(--quire-text)] outline-none transition-colors focus-visible:border-[var(--quire-red)] focus-visible:ring-2 focus-visible:ring-[var(--quire-red-soft)]" >
+        <span className="min-w-0 truncate">{selected?.label || "Choose an option"}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-[var(--quire-muted)]" aria-hidden="true" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content position="popper" sideOffset={8} collisionPadding={16} className="z-[100] max-h-[min(19rem,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-1.5 text-[var(--quire-text)] shadow-[0_18px_45px_rgba(0,0,0,.2)]">
+          <Select.Viewport className="max-h-[min(18.25rem,var(--radix-select-content-available-height))] overflow-y-auto pr-1">
+            {groups.map((group) => <Select.Group key={group.label}>
+              <Select.Label className="px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--quire-muted)]">{group.label}</Select.Label>
+              {group.options.map((option) => <Select.Item key={option.value} value={option.value} className="relative flex cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-2.5 text-sm leading-5 outline-none data-[highlighted]:bg-[var(--quire-hover)] data-[state=checked]:bg-[var(--quire-red-soft)]">
+                <Select.ItemIndicator className="absolute left-2.5 grid h-4 w-4 place-items-center text-[var(--quire-red)]"><Check className="h-3.5 w-3.5" /></Select.ItemIndicator>
+                <Select.ItemText>{option.label}</Select.ItemText>
+              </Select.Item>)}
+            </Select.Group>)}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
 function aiBridge() {
   return (window as Window & { quireDesktop?: DesktopAiBridge }).quireDesktop;
 }
@@ -122,7 +181,7 @@ interface AppSettingsModalProps {
 export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceChange }: AppSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [provider, setProvider] = useState<AiProvider>("openrouter");
-  const [model, setModel] = useState("openrouter/free");
+  const [model, setModel] = useState("z-ai/glm-5.2:free");
   const [apiKey, setApiKey] = useState("");
   const [customEndpoint, setCustomEndpoint] = useState("");
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
@@ -249,12 +308,21 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
 
   const modelOptions = [...(curatedModels[provider] || []), ...availableModels.filter((available) => !(curatedModels[provider] || []).some((curated) => curated.id === available.id))];
   const usesCustomModel = !modelOptions.some((option) => option.id === model);
+  const modelGroups = modelOptions.reduce<SelectGroup<string>[]>((groups, option) => {
+    const label = option.group || (availableModels.some((available) => available.id === option.id) ? "Models available to your key" : "Recommended models");
+    const group = groups.find((candidate) => candidate.label === label);
+    const selectable = { value: option.id, label: option.label };
+    if (group) group.options.push(selectable);
+    else groups.push({ label, options: [selectable] });
+    return groups;
+  }, []);
+  modelGroups.push({ label: "Other", options: [{ value: CUSTOM_MODEL, label: "Use a custom model ID…" }] });
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[81] flex max-h-[min(44rem,calc(100vh-2rem))] w-[min(calc(100vw-2rem),48rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] text-[var(--quire-text)] shadow-[0_26px_90px_rgba(0,0,0,.3)] outline-none">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[81] flex h-[min(36rem,calc(100vh-2rem))] w-[min(calc(100vw-2rem),48rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] text-[var(--quire-text)] shadow-[0_26px_90px_rgba(0,0,0,.3)] outline-none">
           <aside className="hidden w-44 shrink-0 border-r border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-3 sm:block">
             <Dialog.Title className="px-2 pb-4 pt-1 text-sm font-semibold tracking-[-0.02em]">Settings</Dialog.Title>
             <nav className="grid gap-1" aria-label="Settings sections">
@@ -282,7 +350,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
             </div>
 
             {tab === "general" ? (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
                   <div className="text-[11px] font-bold tracking-[0.13em] text-[var(--quire-muted)]">APPEARANCE</div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-[-0.045em]">Make Quire feel like yours.</h2>
@@ -296,7 +364,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
                   <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.13em] text-[var(--quire-red)]"><Sparkles className="h-3.5 w-3.5" /> QUIRE DRAFT</div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-[-0.045em]">Your key. Your choice.</h2>
@@ -310,29 +378,7 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                 {loading ? <div className="flex items-center gap-2 py-8 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />Loading Quire Draft settings…</div> : <>
                   <div>
                     <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-provider">Provider</label>
-                    <select id="ai-provider" value={provider} onChange={(event) => changeProvider(event.target.value as AiProvider)} className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 text-sm font-medium outline-none focus:border-[var(--quire-red)]">
-                      <optgroup label="Direct APIs">
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic (Claude)</option>
-                        <option value="google">Google Gemini</option>
-                        <option value="mistral">Mistral AI</option>
-                        <option value="xai">xAI</option>
-                        <option value="cohere">Cohere</option>
-                        <option value="perplexity">Perplexity</option>
-                      </optgroup>
-                      <optgroup label="Hosted model APIs">
-                        <option value="openrouter">OpenRouter — multi-provider catalog and free models</option>
-                        <option value="groq">Groq</option>
-                        <option value="deepseek">DeepSeek</option>
-                        <option value="together">Together AI</option>
-                        <option value="fireworks">Fireworks AI</option>
-                        <option value="cerebras">Cerebras</option>
-                        <option value="sambanova">SambaNova</option>
-                      </optgroup>
-                      <optgroup label="Bring your own endpoint">
-                        <option value="custom">Custom OpenAI-compatible API</option>
-                      </optgroup>
-                    </select>
+                    <PremiumSelect id="ai-provider" value={provider} onValueChange={changeProvider} groups={providerGroups} ariaLabel="AI provider" />
                     <p className="mt-2 text-xs leading-5 text-[var(--quire-muted)]">OpenRouter covers a broad multi-provider catalog. The custom option covers any service with an OpenAI-compatible chat-completions API.</p>
                   </div>
                   {provider === "custom" && <div>
@@ -347,13 +393,10 @@ export function AppSettingsModal({ open, onOpenChange, appearance, onAppearanceC
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-[var(--quire-text-secondary)]" htmlFor="ai-model">Model</label>
-                    <select id="ai-model" value={usesCustomModel ? CUSTOM_MODEL : model} onChange={(event) => setModel(event.target.value === CUSTOM_MODEL ? "" : event.target.value)} className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 text-sm outline-none focus:border-[var(--quire-red)]">
-                      {modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                      <option value={CUSTOM_MODEL}>Custom model ID…</option>
-                    </select>
+                    <PremiumSelect id="ai-model" value={usesCustomModel ? CUSTOM_MODEL : model} onValueChange={(nextModel) => setModel(nextModel === CUSTOM_MODEL ? "" : nextModel)} groups={modelGroups} ariaLabel="Model" />
                     {usesCustomModel && <input aria-label="Custom model ID" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Enter a provider model ID" className="mt-2 w-full rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 py-2.5 font-mono text-sm outline-none focus:border-[var(--quire-red)]" />}
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs leading-5 text-[var(--quire-muted)]">The initial choices use exact IDs. Load the current catalog to see the models your own key can use.</p>
+                      <p className="text-xs leading-5 text-[var(--quire-muted)]">The five free OpenRouter choices are exact model IDs, not a rotating route. Load the current catalog to see the models your own key can use.</p>
                       <button type="button" disabled={loadingModels} onClick={() => void loadProviderModels()} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--quire-border)] px-2.5 py-1.5 text-xs font-semibold text-[var(--quire-text-secondary)] transition-colors hover:bg-[var(--quire-hover)] disabled:opacity-60">{loadingModels && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{loadingModels ? "Loading models" : "Load exact models"}</button>
                     </div>
                   </div>

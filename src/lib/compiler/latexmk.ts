@@ -4,6 +4,64 @@ import { LatexCompiler, CompileRequest, CompileResult, LatexDiagnostic } from ".
 import { storage } from "@/lib/projects/local-storage";
 import { parseDiagnostics } from "./diagnostics";
 import fs from "fs/promises";
+import fsSync from "fs";
+
+function findWindowsLatexmk(): string | undefined {
+  if (process.platform !== "win32") return undefined;
+
+  const candidates: string[] = [];
+  const addRoot = (root?: string) => {
+    if (!root) return;
+    candidates.push(
+      path.join(root, "miktex", "bin", "x64", "latexmk.exe"),
+      path.join(root, "miktex", "bin", "latexmk.exe"),
+      path.join(root, "bin", "x64", "latexmk.exe"),
+      path.join(root, "bin", "latexmk.exe"),
+    );
+  };
+
+  const parents = [
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs"),
+    process.env.LOCALAPPDATA,
+    process.env.APPDATA,
+    process.env.ProgramData,
+    process.env.ProgramFiles,
+    process.env["ProgramFiles(x86)"],
+  ].filter((value): value is string => Boolean(value));
+
+  for (const parent of parents) {
+    try {
+      for (const entry of fsSync.readdirSync(parent, { withFileTypes: true })) {
+        if (entry.isDirectory() && /^miktex(?:\s|$)/i.test(entry.name)) addRoot(path.join(parent, entry.name));
+      }
+    } catch {
+      // This is only a discovery convenience; PATH remains a valid fallback.
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function compilerCommand() {
+  const discoveredWindowsCommand = findWindowsLatexmk();
+  const configuredCommand = process.env.QUIRE_LATEXMK_COMMAND;
+  if (discoveredWindowsCommand) return discoveredWindowsCommand;
+  if (configuredCommand && (!path.isAbsolute(configuredCommand) || fsSync.existsSync(configuredCommand))) return configuredCommand;
+  return process.platform === "win32" ? "latexmk.exe" : "latexmk";
+}
+
+function compilerEnvironment(command: string) {
+  const inheritedPath = process.env.QUIRE_LATEX_PATH || process.env.Path || process.env.PATH || "";
+  const commandPath = path.isAbsolute(command) ? path.dirname(command) : "";
+  const searchPath = [commandPath, inheritedPath].filter(Boolean).join(path.delimiter);
+  return {
+    ...process.env,
+    ...(searchPath ? { PATH: searchPath, Path: searchPath } : {}),
+  };
+}
 
 export class LatexmkCompiler implements LatexCompiler {
   private activeProcesses = new Map<string, ChildProcess>();
@@ -39,10 +97,16 @@ export class LatexmkCompiler implements LatexCompiler {
 
       args.push(input.rootFile);
 
-      const child = spawn(process.platform === "win32" ? "latexmk.exe" : "latexmk", args, {
+      const command = compilerCommand();
+      const child = spawn(command, args, {
         cwd: projectPath,
-        env: { ...process.env, PATH: process.env.PATH },
+        // The packaged Windows app starts its local server before a user may
+        // install MiKTeX. Preserve Quire's explicitly discovered TeX path
+        // rather than replacing it with whichever casing Windows happened to
+        // give the inherited Path variable.
+        env: compilerEnvironment(command),
         timeout: parseInt(process.env.QUIRE_COMPILE_TIMEOUT_MS || "60000", 10),
+        windowsHide: true,
       });
 
       this.activeProcesses.set(taskId, child);
@@ -92,7 +156,9 @@ export class LatexmkCompiler implements LatexCompiler {
           success: false,
           diagnostics: [{
             severity: "error",
-            message: `Compiler process failed to start: ${error.message}`
+            message: process.platform === "win32"
+              ? "Quire could not start MiKTeX. Install MiKTeX, then choose Check again from Quire's home screen or restart Quire."
+              : `Compiler process failed to start: ${error.message}`
           }],
           rawLog: error.message,
           durationMs: Date.now() - startTime

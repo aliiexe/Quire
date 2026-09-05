@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Select from "@radix-ui/react-select";
 import {
   ArrowRight,
@@ -75,7 +75,9 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
   const [isCreating, setIsCreating] = useState(false);
   const [isChoosingFolder, setIsChoosingFolder] = useState(false);
   const [folderError, setFolderError] = useState("");
+  const [creationError, setCreationError] = useState("");
   const [isDesktop, setIsDesktop] = useState(false);
+  const isCreatingRef = useRef(false);
 
   useEffect(() => {
     const syncPlatform = window.setTimeout(() => {
@@ -113,9 +115,12 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
 
     let cancelled = false;
     let animationFrame: number | undefined;
+    let visibilityFallback: number | undefined;
     const timers: number[] = [];
+    let started = false;
     const startSequence = () => {
-      if (cancelled) return;
+      if (cancelled || started) return;
+      started = true;
       timers.push(
         window.setTimeout(() => setScene("mark"), 1100),
         window.setTimeout(() => setScene("clouds"), 3700),
@@ -129,7 +134,14 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
     }).quireDesktop;
 
     if (desktop?.whenWindowVisible) {
-      void desktop.whenWindowVisible().then(startSequence);
+      // Windows may display the native window just before the renderer begins
+      // waiting for its ready signal. Fall back gracefully so setup never
+      // remains on its initial blank scene.
+      visibilityFallback = window.setTimeout(startSequence, 350);
+      void desktop.whenWindowVisible().then(() => {
+        if (visibilityFallback !== undefined) window.clearTimeout(visibilityFallback);
+        startSequence();
+      }).catch(startSequence);
     } else {
       animationFrame = window.requestAnimationFrame(startSequence);
     }
@@ -138,6 +150,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
       cancelled = true;
       window.clearTimeout(syncPlatform);
       if (animationFrame !== undefined) window.cancelAnimationFrame(animationFrame);
+      if (visibilityFallback !== undefined) window.clearTimeout(visibilityFallback);
       timers.forEach(window.clearTimeout);
     };
   }, []);
@@ -228,17 +241,29 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
   }
 
   async function createProject() {
-    if (!projectName.trim()) return;
+    if (!projectName.trim() || isCreatingRef.current) return;
 
+    isCreatingRef.current = true;
     setIsCreating(true);
-    const created = await onCreateProject({
-      name: projectName.trim(),
-      template,
-      ...preferences,
-    });
-    setIsCreating(false);
+    setCreationError("");
+    try {
+      const created = await Promise.race([
+        onCreateProject({
+          name: projectName.trim(),
+          template,
+          ...preferences,
+        }),
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 20000)),
+      ]);
 
-    if (created) persistPreferences();
+      if (created) persistPreferences();
+      else setCreationError("Quire could not create that workspace. Check the name and try again, or open an existing project.");
+    } catch {
+      setCreationError("Quire could not create that workspace. Please try again.");
+    } finally {
+      isCreatingRef.current = false;
+      setIsCreating(false);
+    }
   }
 
   function openExisting() {
@@ -410,6 +435,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
                 <span>Give it a name</span>
                 <input value={projectName} onChange={(event) => setProjectName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createProject(); }} placeholder="Untitled document" />
               </label>
+              {creationError ? <p className="quire-onboarding__error" role="alert">{creationError}</p> : null}
               <div className="quire-onboarding__actions">
                 <button type="button" className="quire-onboarding__secondary" onClick={openExisting}>Open an existing project</button>
                 <button type="button" className="quire-onboarding__primary" disabled={!projectName.trim() || isCreating} onClick={() => void createProject()}>

@@ -73,15 +73,22 @@ export class LocalProjectStorage implements ProjectStorage {
     await this.ensureWorkspace();
     
     // Generate a simple ID based on name
-    const projectId = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `project-${Date.now()}`;
-    const projectPath = this.getProjectPath(projectId);
-    
-    // Check if exists
-    try {
-      await fs.stat(projectPath);
-      throw new Error(`Project ${projectId} already exists`);
-    } catch (e: any) {
-      if (e.code !== "ENOENT") throw e;
+    const baseProjectId = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `project-${Date.now()}`;
+    let projectId = baseProjectId;
+    let projectPath = this.getProjectPath(projectId);
+
+    // A default name such as “Untitled Document” should never strand a
+    // first-time writer in setup just because a previous draft used it.
+    for (let suffix = 2; ; suffix += 1) {
+      try {
+        await fs.stat(projectPath);
+        projectId = `${baseProjectId}-${suffix}`;
+        projectPath = this.getProjectPath(projectId);
+      } catch (error: unknown) {
+        const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
+        if (code === "ENOENT") break;
+        throw error;
+      }
     }
     
     // Create structure

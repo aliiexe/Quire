@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowUpRight, CloudOff, FileArchive, FileText, FolderOpen, HardDrive, Loader2, Moon, Plus, Settings, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { QuireWordmark } from "@/components/brand/logo";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectSummary } from "@/lib/projects/storage";
 import { FirstLaunch, type OnboardingPreferences, type OnboardingTemplate } from "@/components/onboarding/FirstLaunch";
@@ -52,7 +52,22 @@ export default function Dashboard() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [projectDefaults, setProjectDefaults] = useState<OnboardingPreferences>(initialProjectDefaults);
   const [compilerStatus, setCompilerStatus] = useState<CompilerStatus | null>(null);
+  const [isCheckingCompiler, setIsCheckingCompiler] = useState(false);
   const router = useRouter();
+
+  const refreshCompilerStatus = useCallback(async () => {
+    const desktop = (window as Window & {
+      quireDesktop?: { getCompilerStatus?: () => Promise<CompilerStatus> };
+    }).quireDesktop;
+    if (!desktop?.getCompilerStatus) return;
+
+    setIsCheckingCompiler(true);
+    try {
+      setCompilerStatus(await desktop.getCompilerStatus());
+    } finally {
+      setIsCheckingCompiler(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -65,19 +80,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const desktop = (window as Window & {
-      quireDesktop?: { getCompilerStatus?: () => Promise<CompilerStatus> };
-    }).quireDesktop;
-
-    void desktop?.getCompilerStatus?.()
-      .then((status) => {
-        if (!cancelled) setCompilerStatus(status);
-      })
-      .catch(() => undefined);
-
-    return () => { cancelled = true; };
-  }, []);
+    void refreshCompilerStatus().catch(() => undefined);
+    const refreshAfterInstall = () => void refreshCompilerStatus().catch(() => undefined);
+    window.addEventListener("focus", refreshAfterInstall);
+    return () => window.removeEventListener("focus", refreshAfterInstall);
+  }, [refreshCompilerStatus]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("quire:theme");
@@ -350,7 +357,10 @@ export default function Dashboard() {
                   <p className="mt-1 max-w-xl text-sm leading-5 text-[var(--quire-muted)]">Quire is ready to edit. Install MiKTeX, or make TeX Live&apos;s <span className="font-mono text-[0.9em]">latexmk</span> available on this PC, to compile PDFs locally.</p>
                 </div>
               </div>
-              <button type="button" onClick={() => void openExternalUrl(compilerStatus.installerUrl || "https://miktex.org/download")} className="shrink-0 rounded-xl bg-[var(--quire-text)] px-4 py-2.5 text-sm font-semibold text-[var(--quire-surface)] transition-opacity hover:opacity-85">Get MiKTeX</button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button type="button" onClick={() => void refreshCompilerStatus()} disabled={isCheckingCompiler} className="rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--quire-text)] transition-colors hover:bg-[var(--quire-hover)] disabled:cursor-wait disabled:opacity-60">{isCheckingCompiler ? "Checking…" : "Check again"}</button>
+                <button type="button" onClick={() => void openExternalUrl(compilerStatus.installerUrl || "https://miktex.org/download")} className="rounded-xl bg-[var(--quire-text)] px-4 py-2.5 text-sm font-semibold text-[var(--quire-surface)] transition-opacity hover:opacity-85">Get MiKTeX</button>
+              </div>
             </section>
           ) : null}
 

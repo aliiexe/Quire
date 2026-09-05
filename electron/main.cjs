@@ -456,7 +456,8 @@ async function requestWritingAssistance({ selection, mode, instruction }) {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error?.message || payload?.message || "Quire Draft could not complete that request.");
+    const providerDetail = payload?.error?.message || payload?.message || payload?.error?.error?.message;
+    throw new Error(providerDetail || `${provider.label} rejected this request (HTTP ${response.status}). Check the API key, selected model, and provider account, then try again.`);
   }
 
   const rawOutput = extractOutput(payload);
@@ -494,11 +495,44 @@ function windowsLatexPaths() {
   if (process.platform !== "win32") return [];
 
   const programFiles = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"]].filter(Boolean);
-  const candidates = [
-    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "MiKTeX", "miktex", "bin", "x64"),
-    process.env.APPDATA && path.join(process.env.APPDATA, "MiKTeX", "miktex", "bin", "x64"),
-    ...programFiles.map((root) => path.join(root, "MiKTeX", "miktex", "bin", "x64")),
+  const candidates = [];
+  const addMiKTeXRoot = (root) => {
+    if (!root) return;
+    candidates.push(
+      path.join(root, "miktex", "bin", "x64"),
+      path.join(root, "miktex", "bin"),
+      path.join(root, "bin", "x64"),
+      path.join(root, "bin"),
+    );
+  };
+
+  // MiKTeX has used both a versioned directory ("MiKTeX 2.9") and an
+  // unversioned one. Do not depend on the installer having updated PATH:
+  // Quire should recognise a just-installed distribution immediately.
+  const installationParents = [
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs"),
+    process.env.APPDATA,
+    process.env.ProgramData,
+    ...programFiles,
   ].filter(Boolean);
+
+  for (const parent of installationParents) {
+    try {
+      for (const entry of fsSync.readdirSync(parent, { withFileTypes: true })) {
+        if (entry.isDirectory() && /^miktex(?:\s|$)/i.test(entry.name)) {
+          addMiKTeXRoot(path.join(parent, entry.name));
+        }
+      }
+    } catch {
+      // An installation location may not exist on this computer.
+    }
+  }
+
+  // Cover the paths used by current user and portable installations too.
+  addMiKTeXRoot(process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "MiKTeX"));
+  addMiKTeXRoot(process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "MiKTeX"));
+  addMiKTeXRoot(process.env.APPDATA && path.join(process.env.APPDATA, "MiKTeX"));
+  addMiKTeXRoot(process.env.ProgramData && path.join(process.env.ProgramData, "MiKTeX"));
 
   // TeX Live installs each release in a versioned folder. Discover installed
   // releases rather than hard-coding a particular year.
@@ -510,7 +544,7 @@ function windowsLatexPaths() {
     // TeX Live is optional; the normal PATH check below still applies.
   }
 
-  return candidates;
+  return [...new Set(candidates.filter(Boolean))];
 }
 
 function latexPath() {
@@ -519,6 +553,33 @@ function latexPath() {
     ? ["/Library/TeX/texbin", "/opt/homebrew/bin", "/usr/local/bin"]
     : windowsLatexPaths();
   return [...platformPaths, systemPath].filter(Boolean).join(path.delimiter);
+}
+
+function latexmkCommand() {
+  const executable = process.platform === "win32" ? "latexmk.exe" : "latexmk";
+  for (const directory of latexPath().split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, executable);
+    try {
+      if (fsSync.statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Continue looking through the remaining TeX locations.
+    }
+  }
+  return executable;
+}
+
+function latexEnvironment() {
+  const compilerPath = latexPath();
+  return {
+    ...process.env,
+    // Windows preserves the original casing of Path. Set both spellings so
+    // Electron, Node and the MiKTeX child all receive the same search path.
+    PATH: compilerPath,
+    Path: compilerPath,
+    QUIRE_LATEX_PATH: compilerPath,
+    QUIRE_LATEXMK_COMMAND: latexmkCommand(),
+  };
 }
 
 function getCompilerStatus() {
@@ -533,8 +594,8 @@ function getCompilerStatus() {
     let child;
 
     try {
-      child = spawn(process.platform === "win32" ? "latexmk.exe" : "latexmk", ["-v"], {
-        env: { ...process.env, PATH: latexPath() },
+      child = spawn(latexmkCommand(), ["-v"], {
+        env: latexEnvironment(),
         windowsHide: true,
       });
     } catch {
@@ -632,11 +693,10 @@ async function startLocalServer() {
   nextServer = spawn(serverExecutable, [serverPath], {
     cwd: runtimePath,
     env: {
-      ...process.env,
+      ...latexEnvironment(),
       ELECTRON_RUN_AS_NODE: "1",
       HOSTNAME: "127.0.0.1",
       PORT: String(port),
-      PATH: latexPath(),
       NODE_PATH: bundledNodePath(),
       QUIRE_WORKSPACE: workspacePath,
     },
@@ -872,7 +932,19 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("quire:list-ai-models", async (_event, input) => listAiModels(input || {}));
-  ipcMain.handle("quire:assist-writing", async (_event, input) => requestWritingAssistance(input || {}));
+  // Electron replaces errors thrown through ipcRenderer.invoke with a generic
+  // “Provider returned error” message on Windows. Return a serialisable result
+  // instead, so Quire Draft can show the writer the useful provider detail.
+  ipcMain.handle("quire:assist-writing", async (_event, input) => {
+    try {
+      return { ok: true, ...(await requestWritingAssistance(input || {})) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Quire Draft could not complete that request.",
+      };
+    }
+  });
 
   ipcMain.on("quire:set-menu-state", (_event, state) => {
     if (typeof state?.autoSave === "boolean") workspaceMenuState.autoSave = state.autoSave;

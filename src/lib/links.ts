@@ -5,5 +5,5 @@ const configuredWebsiteUrl = process.env.NEXT_PUBLIC_QUIRE_WEBSITE_URL?.trim().r
 
 // Change this in Vercel through NEXT_PUBLIC_QUIRE_WEBSITE_URL if the
 // production deployment uses a custom domain or a different project slug.
-export const QUIRE_WEBSITE_URL = configuredWebsiteUrl || "https://quire.vercel.app";
+export const QUIRE_WEBSITE_URL = configuredWebsiteUrl || "https://quire-app.vercel.app";
 export const QUIRE_PRIVACY_POLICY_URL = `${QUIRE_WEBSITE_URL}/privacy`;

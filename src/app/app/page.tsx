@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { ProjectSummary } from "@/lib/projects/storage";
 import { FirstLaunch, type OnboardingPreferences, type OnboardingTemplate } from "@/components/onboarding/FirstLaunch";
 import * as Dialog from "@radix-ui/react-dialog";
-import { QUIRE_WEBSITE_URL } from "@/lib/links";
+import { QUIRE_PRIVACY_POLICY_URL, QUIRE_WEBSITE_URL } from "@/lib/links";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 
 const initialProjectDefaults: OnboardingPreferences = {
@@ -218,17 +218,24 @@ export default function Dashboard() {
     setTheme(nextTheme);
   };
 
-  const openWebsite = async () => {
+  const openExternalUrl = async (url: string) => {
     const desktop = (window as Window & {
       quireDesktop?: { openExternalUrl?: (input: { url: string }) => Promise<void> };
     }).quireDesktop;
 
     if (desktop?.openExternalUrl) {
-      await desktop.openExternalUrl({ url: QUIRE_WEBSITE_URL });
+      await desktop.openExternalUrl({ url });
       return;
     }
 
-    window.open(QUIRE_WEBSITE_URL, "_blank", "noopener,noreferrer");
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openWebsite = () => openExternalUrl(QUIRE_WEBSITE_URL);
+
+  const openPrivacyPolicy = async () => {
+    await openExternalUrl(QUIRE_PRIVACY_POLICY_URL);
+    setShowPrivacy(false);
   };
 
   if (!onboardingReady) {
@@ -392,7 +399,7 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="mt-5 text-xs leading-5 text-[var(--quire-muted)]">This is the in-app privacy summary. Read the full policy for the privacy contact and complete local-first data practices.</p>
-            <Link href="/privacy" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--quire-red)] hover:underline">Read the full privacy policy <ArrowUpRight className="h-4 w-4" /></Link>
+            <button type="button" onClick={() => void openPrivacyPolicy()} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--quire-red)] hover:underline">Read the full privacy policy <ArrowUpRight className="h-4 w-4" /></button>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

@@ -9,11 +9,13 @@ export class LatexmkCompiler implements LatexCompiler {
   private activeProcesses = new Map<string, ChildProcess>();
 
   async compile(input: CompileRequest): Promise<CompileResult> {
-    // Cancel any existing compile for this project
-    await this.cancel(input.projectId);
+    const taskId = input.taskId || input.projectId;
+    // Cancel any existing compile for this exact workspace task. A temporary
+    // Quire Draft preview must never interrupt the project's normal build.
+    await this.cancel(taskId);
 
     const startTime = Date.now();
-    const projectPath = getSafeProjectPath(input.projectId);
+    const projectPath = input.projectPath ? path.resolve(input.projectPath) : getSafeProjectPath(input.projectId);
     const buildDir = path.join(projectPath, ".quire", "build");
     
     // Ensure build dir exists
@@ -43,7 +45,7 @@ export class LatexmkCompiler implements LatexCompiler {
         timeout: parseInt(process.env.QUIRE_COMPILE_TIMEOUT_MS || "60000", 10),
       });
 
-      this.activeProcesses.set(input.projectId, child);
+      this.activeProcesses.set(taskId, child);
 
       let stdout = "";
       let stderr = "";
@@ -52,7 +54,7 @@ export class LatexmkCompiler implements LatexCompiler {
       child.stderr?.on("data", (data) => (stderr += data.toString()));
 
       child.on("close", async (code) => {
-        this.activeProcesses.delete(input.projectId);
+        this.activeProcesses.delete(taskId);
         
         const rawLog = stdout + "\\n" + stderr;
         const diagnostics = parseDiagnostics(rawLog);
@@ -85,7 +87,7 @@ export class LatexmkCompiler implements LatexCompiler {
       });
 
       child.on("error", (error) => {
-        this.activeProcesses.delete(input.projectId);
+        this.activeProcesses.delete(taskId);
         resolve({
           success: false,
           diagnostics: [{

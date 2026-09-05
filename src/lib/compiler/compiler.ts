@@ -18,6 +18,10 @@ export interface CompileResult {
 
 export interface CompileRequest {
   projectId: string;
+  /** A private workspace copy used for a non-destructive proposal preview. */
+  projectPath?: string;
+  /** Keeps an isolated preview build from cancelling the writer's normal build. */
+  taskId?: string;
   rootFile: string;
   compiler: "pdflatex" | "xelatex" | "lualatex";
   synctex: boolean;

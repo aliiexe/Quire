@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld("quireDesktop", {
     ipcRenderer.on("quire:menu-command", listener);
     return () => ipcRenderer.removeListener("quire:menu-command", listener);
   },
+  onOpenDraftForSelection: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("quire:open-draft-for-selection", listener);
+    return () => ipcRenderer.removeListener("quire:open-draft-for-selection", listener);
+  },
   whenWindowVisible: () => {
     if (windowIsVisible) return Promise.resolve();
     return new Promise((resolve) => visibilityWaiters.push(resolve));

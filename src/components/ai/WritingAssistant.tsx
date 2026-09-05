@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, FilePenLine, Loader2, Sparkles, X } from "lucide-react";
 
@@ -15,6 +15,7 @@ type AssistantMode = "improve" | "correct" | "shorten" | "explain" | "custom" | 
 type DesktopAiBridge = {
   getAiSettings?: () => Promise<{ providerLabel: string; model: string; keyConfigured: boolean }>;
   assistWriting?: (input: { selection: string; mode: AssistantMode; instruction?: string }) => Promise<{ output: string }>;
+  onOpenDraftForSelection?: (listener: (payload: { text?: string }) => void) => () => void;
 };
 
 function aiBridge() {
@@ -48,6 +49,7 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
   const [instruction, setInstruction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +68,26 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
       .finally(() => { if (!cancelled) setLoadingSettings(false); });
     return () => { cancelled = true; };
   }, [open]);
+
+  useEffect(() => {
+    if (!output) return;
+    const frame = requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    return () => cancelAnimationFrame(frame);
+  }, [output]);
+
+  useEffect(() => {
+    const bridge = aiBridge();
+    if (!bridge?.onOpenDraftForSelection) return;
+
+    return bridge.onOpenDraftForSelection((payload) => {
+      const selectedText = selection?.text.trim();
+      setWorkspaceMode("selection");
+      setOutput("");
+      setNotice("");
+      setError(selectedText && selectedText === payload.text?.trim() ? "" : "Keep the text selected in the editor, then send it to Quire Draft.");
+      setOpen(true);
+    });
+  }, [selection]);
 
   const chooseWorkspaceMode = (nextMode: "selection" | "draft") => {
     setWorkspaceMode(nextMode);
@@ -151,7 +173,7 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
             <div>
               <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.13em] text-[var(--quire-red)]"><Sparkles className="h-3.5 w-3.5" /> QUIRE DRAFT</div>
               <Dialog.Title className="mt-2 text-2xl font-semibold tracking-[-0.045em]">A thoughtful writing room.</Dialog.Title>
-              <Dialog.Description className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Refine a passage or start a complete LaTeX document from a brief. Preview every change in your editor, then apply or reject it.</Dialog.Description>
+              <Dialog.Description className="mt-2 text-sm leading-6 text-[var(--quire-muted)]">Refine a passage or start a complete LaTeX document from a brief. Preview every change in your editor and PDF, then apply or reject it.</Dialog.Description>
             </div>
             <Dialog.Close className="rounded-lg p-2 text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]" aria-label="Close Quire Draft"><X className="h-4 w-4" /></Dialog.Close>
           </div>
@@ -189,11 +211,11 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
 
           <p className="mt-4 text-xs leading-5 text-[var(--quire-muted)]">Quire Draft asks for original, voice-preserving writing and never claims to check plagiarism, citations, or AI detection. Your provider&apos;s data policy applies only to the text or brief you choose to send.</p>
 
-          {working && <div className="mt-5 flex items-center gap-2 text-sm text-[var(--quire-muted)]"><Loader2 className="h-4 w-4 animate-spin" />{mode === "draft" ? "Shaping your LaTeX draft…" : mode === "custom" ? "Following your direction…" : "Considering the selected passage…"}</div>}
+          {working && <div role="status" aria-live="polite" className="mt-5 flex items-center gap-3 rounded-xl border border-[var(--quire-red)]/25 bg-[var(--quire-red-soft)] px-4 py-3 text-sm text-[var(--quire-text-secondary)]"><Loader2 className="h-4 w-4 animate-spin text-[var(--quire-red)]" /><div><strong className="text-[var(--quire-text)]">Working on your request</strong><p className="mt-0.5 text-xs text-[var(--quire-muted)]">{mode === "draft" ? "Shaping your LaTeX draft…" : mode === "custom" ? "Following your direction…" : "Considering the selected passage…"}</p></div></div>}
           {error && <p role="alert" className="mt-5 text-sm leading-6 text-[var(--quire-red)]">{error}</p>}
           {notice && <p className="mt-5 flex items-center gap-1.5 text-sm text-[#5d875b]"><Check className="h-4 w-4" />{notice}</p>}
 
-          {output && <div className="mt-5"><div className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">{mode === "explain" ? "EDITORIAL NOTES" : mode === "draft" ? "CREATED LATEX DRAFT" : "SUGGESTED REVISION"}</div><pre className={`mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4 text-sm leading-6 text-[var(--quire-text-secondary)] ${mode === "draft" ? "font-mono text-[13px]" : "font-sans"}`}>{output}</pre>{mode !== "explain" && <div className="mt-4 flex flex-col items-end gap-2"><button type="button" disabled={mode === "draft" && !activeFileName} onClick={mode === "draft" ? previewDocumentDraft : previewSuggestion} className="rounded-xl bg-[var(--quire-red)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(255,0,0,.16)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45">Preview in editor</button><p className="text-right text-xs text-[var(--quire-muted)]">Nothing is changed or saved until you apply it.</p>{mode === "draft" && !activeFileName && <p className="text-xs text-[var(--quire-muted)]">Open a text file to place this draft.</p>}</div>}</div>}
+          {output && <div ref={resultRef} className="mt-5 scroll-mt-5"><div role="status" aria-live="polite" className="mb-3 flex items-center gap-2 rounded-xl border border-[#83a77d]/35 bg-[#83a77d]/10 px-4 py-3 text-sm text-[var(--quire-text-secondary)]"><Check className="h-4 w-4 text-[#5d875b]" /><span><strong className="text-[var(--quire-text)]">Suggestion ready.</strong> Review it below, then preview it in your workspace.</span></div><div className="text-[11px] font-bold tracking-[0.12em] text-[var(--quire-muted)]">{mode === "explain" ? "EDITORIAL NOTES" : mode === "draft" ? "CREATED LATEX DRAFT" : "SUGGESTED REVISION"}</div><pre className={`mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] p-4 text-sm leading-6 text-[var(--quire-text-secondary)] ${mode === "draft" ? "font-mono text-[13px]" : "font-sans"}`}>{output}</pre>{mode !== "explain" && <div className="mt-4 flex flex-col items-end gap-2"><button type="button" disabled={mode === "draft" && !activeFileName} onClick={mode === "draft" ? previewDocumentDraft : previewSuggestion} className="rounded-xl bg-[var(--quire-red)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(255,0,0,.16)] transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-45">Preview in workspace</button><p className="text-right text-xs text-[var(--quire-muted)]">Quire will compile this temporary proposal without touching your project.</p>{mode === "draft" && !activeFileName && <p className="text-xs text-[var(--quire-muted)]">Open a text file to place this draft.</p>}</div>}</div>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

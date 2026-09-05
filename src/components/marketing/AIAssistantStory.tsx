@@ -4,7 +4,7 @@ import { QUIRE_MAC_DOWNLOAD_URL } from "@/lib/links";
 const promises = [
   { icon: KeyRound, title: "Your provider", body: "Choose a direct provider, OpenRouter, or a compatible API in Settings. Quire never provides, sees, or reuses your key." },
   { icon: MousePointer2, title: "Only what you ask", body: "Send a chosen passage or a writing brief—never an entire project in the background." },
-  { icon: ShieldCheck, title: "Always your decision", body: "Review every suggestion before it reaches the document. Your voice remains in charge." },
+  { icon: ShieldCheck, title: "Always your decision", body: "Review the proposed source and compiled PDF before it reaches the document. Your voice remains in charge." },
 ];
 
 export function AIAssistantStory() {
@@ -15,7 +15,7 @@ export function AIAssistantStory() {
           <p className="mk-eyebrow"><Sparkles size={14} aria-hidden="true" /> Quire Draft</p>
           <h2 className="mk-display">A writing room, on your terms.</h2>
           <p className="mk-ai-story__lede">Refine a selected passage, repair a rough draft, or begin a complete LaTeX document from a clear brief—without handing your work over to an impersonal editor.</p>
-          <p className="mk-ai-story__note">Built for careful writing, not shortcuts. Quire Draft keeps every result reviewable and never changes a file in the background.</p>
+          <p className="mk-ai-story__note">Built for careful writing, not shortcuts. Every proposal compiles privately for review and never changes a file in the background.</p>
           <a href={QUIRE_MAC_DOWNLOAD_URL} className="mk-button mk-button--light">Try Quire Draft in Quire <WandSparkles size={16} /></a>
         </div>
 

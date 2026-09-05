@@ -625,6 +625,39 @@ function createWindow() {
     if (localServerUrl && !url.startsWith(localServerUrl)) event.preventDefault();
   });
 
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const selectedText = typeof params.selectionText === "string" ? params.selectionText.trim() : "";
+    const template = [];
+
+    // Keep the familiar Mac editing actions available exactly where people
+    // expect them, then add Quire's writing action only when text is selected.
+    if (params.isEditable) {
+      template.push(
+        { role: "undo", enabled: params.editFlags.canUndo },
+        { role: "redo", enabled: params.editFlags.canRedo },
+        { type: "separator" },
+        { role: "cut", enabled: selectedText.length > 0 },
+        { role: "copy", enabled: selectedText.length > 0 },
+        { role: "paste", enabled: params.editFlags.canPaste },
+        { role: "pasteAndMatchStyle", enabled: params.editFlags.canPaste },
+        { type: "separator" },
+        { role: "selectAll", enabled: params.editFlags.canSelectAll },
+      );
+    } else if (selectedText) {
+      template.push({ role: "copy" });
+    }
+
+    if (selectedText) {
+      if (template.length > 0) template.push({ type: "separator" });
+      template.push({
+        label: "Send selection to Quire Draft",
+        click: () => mainWindow?.webContents.send("quire:open-draft-for-selection", { text: selectedText }),
+      });
+    }
+
+    if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: mainWindow });
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });

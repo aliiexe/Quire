@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, PanelImperativeHandle } from "react-resizable-panels";
 import { useRef } from "react";
-import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen, Upload, FileText, Image as ImageIcon } from "lucide-react";
+import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen, Upload, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { QuireMark } from "@/components/brand/logo";
@@ -35,12 +35,15 @@ function assetKind(path: string): "image" | "pdf" | null {
 
 type ProjectAsset = { path: string; kind: "image" | "pdf" };
 type AssistantProposal = {
+  id: string;
   filePath: string;
   originalContent: string;
   previewContent: string;
   previewRange?: { from: number; to: number };
   selection?: WritingSelection;
   label: string;
+  compileStatus: "compiling" | "ready" | "failed";
+  compileDiagnostics: LatexDiagnostic[];
 };
 
 type DesktopMenuCommand =
@@ -265,6 +268,48 @@ export default function Workspace() {
     setAssistantSelection(selection.text ? selection : null);
   }, []);
 
+  const discardDraftPreview = useCallback((token: string) => {
+    void fetch(`/api/projects/${params.projectId}/draft-preview?token=${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }).catch(() => {
+      // This is a best-effort cleanup for an isolated temporary workspace.
+      // It never affects the writer's actual project.
+    });
+  }, [params.projectId]);
+
+  const beginAssistantProposal = useCallback((proposal: Omit<AssistantProposal, "id" | "compileStatus" | "compileDiagnostics">) => {
+    const token = crypto.randomUUID();
+    setAssistantProposal({
+      ...proposal,
+      id: token,
+      compileStatus: "compiling",
+      compileDiagnostics: [],
+    });
+
+    void fetch(`/api/projects/${params.projectId}/draft-preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, filePath: proposal.filePath, content: proposal.previewContent }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Quire Draft could not compile this proposal.");
+        setAssistantProposal((current) => current?.id === token ? {
+          ...current,
+          compileStatus: data.success ? "ready" : "failed",
+          compileDiagnostics: data.diagnostics || [],
+        } : current);
+      })
+      .catch((error) => {
+        setAssistantProposal((current) => current?.id === token ? {
+          ...current,
+          compileStatus: "failed",
+          compileDiagnostics: [{ severity: "error", message: error instanceof Error ? error.message : "Quire Draft could not compile this proposal." }],
+        } : current);
+      });
+    return token;
+  }, [params.projectId]);
+
   const previewAssistantSuggestion = useCallback((replacement: string, selection: WritingSelection) => {
     if (!activeFile || !replacement) return false;
     if (assistantProposal) return false;
@@ -272,7 +317,7 @@ export default function Workspace() {
     if (currentContent.slice(selection.from, selection.to) !== selection.text) return false;
 
     const previewContent = `${currentContent.slice(0, selection.from)}${replacement}${currentContent.slice(selection.to)}`;
-    setAssistantProposal({
+    beginAssistantProposal({
       filePath: activeFile,
       originalContent: currentContent,
       previewContent,
@@ -281,15 +326,15 @@ export default function Workspace() {
       label: "Suggested revision",
     });
     return true;
-  }, [activeFile, assistantProposal, fileContents]);
+  }, [activeFile, assistantProposal, beginAssistantProposal, fileContents]);
 
   const previewActiveDocumentFromDraft = useCallback((replacement: string) => {
     if (!activeFile || !isEditableTextFile(activeFile) || !replacement.trim()) return false;
     if (assistantProposal) return false;
-    setAssistantProposal({ filePath: activeFile, originalContent: fileContents[activeFile] || "", previewContent: replacement, label: "LaTeX draft" });
+    beginAssistantProposal({ filePath: activeFile, originalContent: fileContents[activeFile] || "", previewContent: replacement, label: "LaTeX draft" });
     setPreviewedAsset(null);
     return true;
-  }, [activeFile, assistantProposal, fileContents]);
+  }, [activeFile, assistantProposal, beginAssistantProposal, fileContents]);
 
   const acceptAssistantProposal = useCallback(() => {
     if (!assistantProposal || assistantProposal.filePath !== activeFile) return;
@@ -297,6 +342,7 @@ export default function Workspace() {
       setAssistantProposal(null);
       return;
     }
+    discardDraftPreview(assistantProposal.id);
     updateFileContent(activeFile, assistantProposal.previewContent);
     if (assistantProposal.previewRange) {
       const { from, to } = assistantProposal.previewRange;
@@ -305,11 +351,19 @@ export default function Workspace() {
       setAssistantSelection(null);
     }
     setAssistantProposal(null);
-  }, [activeFile, assistantProposal, fileContents, updateFileContent]);
+  }, [activeFile, assistantProposal, discardDraftPreview, fileContents, updateFileContent]);
 
   const rejectAssistantProposal = useCallback(() => {
+    if (assistantProposal) discardDraftPreview(assistantProposal.id);
     setAssistantProposal(null);
-  }, []);
+  }, [assistantProposal, discardDraftPreview]);
+
+  useEffect(() => {
+    const token = assistantProposal?.id;
+    return () => {
+      if (token) discardDraftPreview(token);
+    };
+  }, [assistantProposal?.id, discardDraftPreview]);
 
   useEffect(() => {
     setAssistantSelection(null);
@@ -661,8 +715,8 @@ export default function Workspace() {
       {assistantProposal && (
         <aside className="fixed bottom-14 left-1/2 z-[60] flex w-[min(calc(100vw-2rem),38rem)] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-4 py-3 text-[var(--quire-text)] shadow-[0_18px_44px_rgba(0,0,0,.22)] backdrop-blur-xl" aria-label="Quire Draft suggestion review">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]">✦</span>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold">{assistantProposal.label} preview</p><p className="text-xs text-[var(--quire-muted)]">Not saved until you apply it.</p></div>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]">{assistantProposal.compileStatus === "compiling" ? <Loader2 className="h-4 w-4 animate-spin" /> : "✦"}</span>
+            <div className="min-w-0"><p className="truncate text-sm font-semibold">{assistantProposal.compileStatus === "compiling" ? "Compiling Quire Draft preview…" : assistantProposal.compileStatus === "ready" ? "PDF proposal ready to review" : "Proposal could not compile"}</p><p className="text-xs text-[var(--quire-muted)]">{assistantProposal.compileStatus === "compiling" ? "Your original source and PDF remain untouched." : assistantProposal.compileStatus === "ready" ? "Review the highlighted source and temporary PDF. Nothing is saved until you apply it." : "Your original source and PDF remain untouched. Review the source or reject it."}</p></div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={rejectAssistantProposal} className="rounded-xl px-3 py-2 text-sm font-semibold text-[var(--quire-text-secondary)] transition-colors hover:bg-[var(--quire-hover)]">Reject</button>
@@ -851,6 +905,7 @@ export default function Workspace() {
       {/* Main Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
         {isFileDropActive && <div className="pointer-events-none absolute inset-3 z-[70] grid place-items-center rounded-2xl border-2 border-dashed border-[var(--quire-red)] bg-[color-mix(in_srgb,var(--quire-red-soft)_82%,transparent)] backdrop-blur-[2px]"><div className="rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] px-6 py-4 text-center shadow-[0_18px_44px_rgba(0,0,0,.16)]"><Upload className="mx-auto h-6 w-6 text-[var(--quire-red)]" /><p className="mt-2 text-sm font-semibold">Drop files to add them to this project</p><p className="mt-1 text-xs text-[var(--quire-muted)]">They will be saved locally in the assets folder.</p></div></div>}
+        {isExplorerCollapsed && <button type="button" aria-label="Open Files sidebar" onClick={toggleExplorer} className="absolute left-3 top-3 z-50 inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-2.5 text-xs font-semibold text-[var(--quire-text-secondary)] shadow-sm backdrop-blur-xl transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]"><PanelLeftOpen className="h-4 w-4" /><span>Files</span></button>}
         <PanelGroup orientation="horizontal">
           {/* Project Explorer */}
           <Panel 
@@ -860,7 +915,7 @@ export default function Workspace() {
             collapsible 
             collapsedSize={0}
             onResize={(size) => {
-              const collapsed = Number(size) === 0;
+              const collapsed = size.inPixels <= 1;
               if (collapsed !== isExplorerCollapsed) {
                 setIsExplorerCollapsed(collapsed);
                 localStorage.setItem('quire:sidebar-collapsed', collapsed.toString());
@@ -899,15 +954,6 @@ export default function Workspace() {
               </div>
             </div>
           </Panel>
-          
-          {/* Collapsed Rail Indicator */}
-          {isExplorerCollapsed && (
-            <div className="w-11 shrink-0 border-r border-[var(--quire-border)] bg-[var(--quire-surface-secondary)] flex flex-col items-center py-2 transition-all duration-200">
-               <button aria-label="Open file explorer" onClick={toggleExplorer} className="p-2 hover:bg-[var(--quire-surface)] hover:text-[var(--quire-text)] rounded-[8px] text-[var(--quire-muted)] transition-colors mt-0.5 shadow-sm">
-                  <PanelLeftOpen className="w-4 h-4" />
-               </button>
-            </div>
-          )}
           
           <PanelResizeHandle className="w-1 bg-transparent hover:bg-[var(--quire-red)]/35 transition-colors cursor-col-resize" />
           
@@ -989,11 +1035,28 @@ export default function Workspace() {
           
           {/* PDF Preview */}
           <Panel defaultSize={40} minSize={20}>
-            <PDFViewer 
-              url={previewedAsset?.kind === "pdf" ? `/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}` : `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
-              documentName={previewedAsset?.kind === "pdf" ? previewedAsset.path.split("/").pop() : undefined}
-              onDownload={previewedAsset?.kind === "pdf" ? undefined : () => void downloadPdf()}
-            />
+            {visibleAssistantProposal?.compileStatus === "compiling" ? (
+              <div className="flex h-full flex-col items-center justify-center bg-[var(--quire-pdf-bg)] px-6 text-center">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]"><Loader2 className="h-5 w-5 animate-spin" /></span>
+                <p className="mt-4 text-sm font-semibold text-[var(--quire-text)]">Building your temporary PDF preview</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--quire-muted)]">Quire Draft is compiling an isolated copy of this proposal. Your project files and current PDF will not change.</p>
+              </div>
+            ) : visibleAssistantProposal?.compileStatus === "failed" ? (
+              <div className="flex h-full flex-col items-center justify-center bg-[var(--quire-pdf-bg)] px-6 text-center">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]">!</span>
+                <p className="mt-4 text-sm font-semibold text-[var(--quire-text)]">This proposal did not compile</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--quire-muted)]">{visibleAssistantProposal.compileDiagnostics.find((diagnostic) => diagnostic.severity === "error")?.message || "Review the highlighted source, then reject it or apply it and continue editing."}</p>
+              </div>
+            ) : (
+              <div className="relative h-full">
+                {visibleAssistantProposal && <div className="pointer-events-none absolute left-3 top-[3.75rem] z-20 rounded-lg border border-[var(--quire-red)]/25 bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--quire-text-secondary)] shadow-sm backdrop-blur-xl"><span className="mr-1 text-[var(--quire-red)]">✦</span> Quire Draft temporary PDF preview</div>}
+                <PDFViewer
+                  url={visibleAssistantProposal ? `/api/projects/${params.projectId}/draft-preview?token=${encodeURIComponent(visibleAssistantProposal.id)}` : previewedAsset?.kind === "pdf" ? `/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}` : `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
+                  documentName={visibleAssistantProposal ? "Quire Draft preview.pdf" : previewedAsset?.kind === "pdf" ? previewedAsset.path.split("/").pop() : undefined}
+                  onDownload={visibleAssistantProposal || previewedAsset?.kind === "pdf" ? undefined : () => void downloadPdf()}
+                />
+              </div>
+            )}
           </Panel>
         </PanelGroup>
       </div>

@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Select from "@radix-ui/react-select";
 import { Project } from "@/lib/projects/storage";
 import { useState } from "react";
+import { applyThemeWithFade } from "@/lib/theme";
 
 interface SettingsModalProps {
   project: Project | null;
@@ -21,14 +22,13 @@ export function SettingsModal({ project, onClose, onUpdate }: SettingsModalProps
 
   const handleThemeChange = (newTheme: "system" | "light" | "dark") => {
     setTheme(newTheme);
-    const root = document.documentElement;
     if (newTheme === "system") {
       localStorage.removeItem("quire:theme");
       const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.setAttribute("data-theme", isDark ? "dark" : "light");
+      applyThemeWithFade(isDark ? "dark" : "light");
     } else {
       localStorage.setItem("quire:theme", newTheme);
-      root.setAttribute("data-theme", newTheme);
+      applyThemeWithFade(newTheme);
     }
   };
 

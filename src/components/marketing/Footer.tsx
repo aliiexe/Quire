@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { PlatformDownloadLink } from "./PlatformDownloadLink";
 
 export function Footer() {
   return (
@@ -11,7 +12,7 @@ export function Footer() {
           <nav className="mk-footer__links" aria-label="Footer navigation">
             <Link href="#product">Product</Link><Link href="#features">Features</Link>
             <Link href="#free">Free &amp; Open</Link><Link href="#faq">Questions</Link>
-            <Link href="/privacy">Privacy</Link><a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><a href={QUIRE_DOWNLOADS_URL}>Download Quire</a>
+            <Link href="/privacy">Privacy</Link><a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer">GitHub</a><PlatformDownloadLink className="mk-footer__download" />
           </nav>
         </div>
         <div className="mk-footer__bottom"><span>© {new Date().getFullYear()} Quire</span><span>Free, open source, and local-first.</span></div>

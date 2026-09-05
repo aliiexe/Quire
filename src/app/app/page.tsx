@@ -11,6 +11,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { QUIRE_PRIVACY_POLICY_URL, QUIRE_WEBSITE_URL } from "@/lib/links";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { AppSettingsModal } from "@/components/workspace/AppSettingsModal";
+import { applyThemeWithFade } from "@/lib/theme";
 
 const initialProjectDefaults: OnboardingPreferences = {
   autoCompile: true,
@@ -83,7 +84,7 @@ export default function Dashboard() {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const nextAppearance = savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system";
     const nextTheme = nextAppearance === "dark" || (nextAppearance === "system" && prefersDark) ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", nextTheme);
+    applyThemeWithFade(nextTheme);
     setAppearance(nextAppearance);
     setTheme(nextTheme);
     const desktop = (window as Window & {
@@ -241,7 +242,7 @@ export default function Dashboard() {
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", nextTheme);
+    applyThemeWithFade(nextTheme);
     localStorage.setItem("quire:theme", nextTheme);
     const desktop = (window as Window & {
       quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
@@ -256,7 +257,7 @@ export default function Dashboard() {
     const nextTheme = nextAppearance === "dark" || (nextAppearance === "system" && prefersDark) ? "dark" : "light";
     if (nextAppearance === "system") localStorage.removeItem("quire:theme");
     else localStorage.setItem("quire:theme", nextAppearance);
-    document.documentElement.setAttribute("data-theme", nextTheme);
+    applyThemeWithFade(nextTheme);
     const desktop = (window as Window & {
       quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
     }).quireDesktop;

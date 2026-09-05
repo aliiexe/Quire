@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef } from "react";
-import { Download } from "lucide-react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { PlatformDownloadLink } from "./PlatformDownloadLink";
 
 export function Hero() {
   const container = useRef<HTMLElement>(null);
@@ -38,7 +38,7 @@ export function Hero() {
           <h1 data-hero="title" className="mk-hero__title">Write beautifully.<br />Compile locally.</h1>
           <p data-hero="lede" className="mk-hero__lede">A calm, modern home for writing, compiling, and previewing LaTeX right on your machine.</p>
           <div data-hero="actions" className="mk-hero__actions">
-            <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--light">Download Quire <Download size={16} strokeWidth={2.3} /></a>
+            <PlatformDownloadLink className="mk-button mk-button--light" showIcon />
             <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-button mk-button--ghost">View on GitHub</a>
           </div>
         </div>

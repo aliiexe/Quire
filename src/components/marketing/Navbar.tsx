@@ -3,9 +3,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { MouseEvent, useEffect, useState } from "react";
-import { ArrowUpRight, Download, Menu, Moon, Sun, X } from "lucide-react";
+import { ArrowUpRight, Menu, Moon, Sun, X } from "lucide-react";
 import { useSmoothScroll } from "./SmoothScroll";
-import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { PlatformDownloadLink } from "./PlatformDownloadLink";
+import { applyThemeWithFade } from "@/lib/theme";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -40,7 +42,7 @@ export function Navbar() {
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", nextTheme);
+    applyThemeWithFade(nextTheme);
     localStorage.setItem("quire:theme", nextTheme);
     setTheme(nextTheme);
   };
@@ -71,7 +73,7 @@ export function Navbar() {
           >
             {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <a href={QUIRE_DOWNLOADS_URL} className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`}>Download Quire</a>
+          <PlatformDownloadLink className={`mk-button mk-nav__cta ${scrolled && theme !== "dark" ? "mk-button--dark" : "mk-button--light"}`} />
           <button
             type="button"
             className="mk-nav__menu-toggle"
@@ -95,7 +97,7 @@ export function Navbar() {
         </div>
         <div className="mk-nav__mobile-footer">
           <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={() => setMobileMenuOpen(false)}>GitHub <ArrowUpRight size={15} /></a>
-          <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)}>Download Quire <Download size={16} /></a>
+          <PlatformDownloadLink className="mk-button mk-button--red" onClick={() => setMobileMenuOpen(false)} showIcon />
         </div>
       </nav>
     </header>

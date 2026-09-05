@@ -18,6 +18,7 @@ import {
   WandSparkles,
   Zap,
 } from "lucide-react";
+import { applyThemeWithFade } from "@/lib/theme";
 
 export type OnboardingTemplate = "blank" | "article" | "report" | "thesis";
 
@@ -162,7 +163,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
   function applyAppearance(nextAppearance: Appearance) {
     const nextTheme = resolvedTheme(nextAppearance);
     setAppearance(nextAppearance);
-    document.documentElement.setAttribute("data-theme", nextTheme);
+    applyThemeWithFade(nextTheme);
     const desktop = (window as Window & {
       quireDesktop?: { setWindowAppearance?: (appearance: "light" | "dark") => Promise<void> };
     }).quireDesktop;

@@ -18,6 +18,7 @@ import type { LatexDiagnostic } from "@/lib/compiler/compiler";
 import type { Project, ProjectNode } from "@/lib/projects/storage";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { WritingAssistant, type WritingSelection } from "@/components/ai/WritingAssistant";
+import { applyThemeWithFade } from "@/lib/theme";
 
 const EDITABLE_TEXT_EXTENSIONS = new Set([".tex", ".txt", ".bib", ".sty", ".cls", ".md", ".json", ".yaml", ".yml"]);
 const IMAGE_ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"]);
@@ -787,10 +788,9 @@ export default function Workspace() {
             aria-label="Toggle appearance"
             className="hidden sm:inline-flex p-2 text-[var(--quire-muted)] hover:text-[var(--quire-text)] transition-all duration-150 ease-out rounded-[8px] hover:bg-[var(--quire-hover)]"
             onClick={() => {
-              const root = document.documentElement;
-              const current = root.getAttribute('data-theme');
+              const current = document.documentElement.getAttribute('data-theme');
               const next = current === 'dark' ? 'light' : 'dark';
-              root.setAttribute('data-theme', next);
+              applyThemeWithFade(next);
               localStorage.setItem('quire:theme', next);
               const desktop = desktopBridge();
               void desktop?.setWindowAppearance?.(next);

@@ -1,4 +1,5 @@
-import { QUIRE_DOWNLOADS_URL, QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { PlatformDownloadLink } from "./PlatformDownloadLink";
 
 const release = {
   name: "Quire",
@@ -18,7 +19,7 @@ export function Pricing() {
             <p className="mk-price__price">{release.price}</p>
             <p className="mk-price__detail">{release.details}</p>
             <div className="mk-price__actions">
-              <a href={QUIRE_DOWNLOADS_URL} className="mk-button mk-button--dark">Download Quire</a>
+              <PlatformDownloadLink className="mk-button mk-button--dark" />
               <a href={QUIRE_REPOSITORY_URL} target="_blank" rel="noreferrer" className="mk-price__source">Read the source</a>
             </div>
           </article>

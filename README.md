@@ -27,7 +27,7 @@ Your project files remain ordinary files in a local workspace. Compiles use your
 | Quire gives you | What that means |
 | --- | --- |
 | Local projects | Your source files stay in a folder you control. |
-| Local compilation | `latexmk` runs with your local TeX Live or MacTeX installation. |
+| Local compilation | `latexmk` runs with your local TeX distribution, including MacTeX, MiKTeX, or TeX Live. |
 | A focused workspace | Editor, project tree, build controls, diagnostics, and PDF preview belong in one place. |
 | Plain-file portability | Open an existing project, work normally, and take it with you whenever you like. |
 | Open source | Inspect the implementation, adapt it to your workflow, and help make it better. |
@@ -83,9 +83,9 @@ npm run build
 npm start
 ```
 
-## macOS app and DMG builds
+## Desktop installers
 
-Quire is packaged for macOS with Electron. The installed app opens directly into the local workspace, keeps projects in `~/Documents/Quire` by default, and runs the bundled Quire server only on `127.0.0.1`.
+Quire is packaged for macOS and Windows with Electron. The installed app opens directly into the local workspace, keeps projects in your Documents folder by default, and runs the bundled Quire server only on `127.0.0.1`.
 
 ### Run the desktop app during development
 
@@ -93,9 +93,11 @@ Quire is packaged for macOS with Electron. The installed app opens directly into
 npm run desktop:dev
 ```
 
-This starts the Next.js development server, waits until it is ready, and opens Quire in its native macOS window.
+This starts the Next.js development server, waits until it is ready, and opens Quire in its native desktop window.
 
 ### Build installers
+
+macOS:
 
 ```bash
 npm run desktop:build
@@ -108,11 +110,30 @@ The command creates two DMG installers in `release/`:
 | `Quire-<version>-arm64.dmg` | Apple Silicon: M1, M2, M3, M4, and later |
 | `Quire-<version>-x64.dmg` | Intel Macs |
 
-Upload both files to a GitHub Release so the **Download for macOS** actions on the landing page lead users to the available installers.
+Windows (run this on Windows, or use the included GitHub Actions workflow):
 
-### Publish a free macOS preview
+```bash
+npm run desktop:build:win
+```
 
-Quire can be released as a free, unsigned preview before Apple Developer ID signing is available. Create a GitHub Release, attach the DMG files, and use the prepared [release description](docs/GITHUB_RELEASE_TEMPLATE.md). It explains that users may need to choose **System Settings → Privacy & Security → Open Anyway** after their first launch attempt.
+The Windows command creates one standard installer in `release/`:
+
+| Installer | PCs |
+| --- | --- |
+| `Quire-<version>-x64.exe` | 64-bit Windows 10 and Windows 11 PCs |
+
+On a Windows computer, install [MiKTeX](https://miktex.org/download) or TeX Live before compiling. Quire detects a normal MiKTeX or TeX Live installation and explains this in the app if `latexmk` is not yet available.
+
+For a reliable Windows release from this Mac-based project, open **Actions → Build Windows installer → Run workflow** on GitHub after pushing the code. The workflow builds on a native Windows runner and provides the installer as a downloadable artifact.
+
+Upload all available installer files to a GitHub Release so the **Download Quire** actions on the landing page lead users to the right installer.
+
+### Publish free desktop previews
+
+Quire can be released as a free, unsigned preview before code signing is available. Create a GitHub Release, attach the DMG and Windows installer files, and use the prepared [release description](docs/GITHUB_RELEASE_TEMPLATE.md).
+
+- On macOS, users may need to choose **System Settings → Privacy & Security → Open Anyway** after the first launch attempt.
+- On Windows, Microsoft Defender SmartScreen may warn that the independent app is not yet commonly recognized. Users can review the publisher and release source before choosing **More info → Run anyway**.
 
 ### For a future Apple-verified release
 
@@ -124,7 +145,7 @@ Set up a Developer ID Application certificate and Apple notarization credentials
 
 Import this repository into Vercel as a Next.js project. The public privacy-policy route is included automatically at `/privacy`.
 
-In **Vercel → Settings → Environment Variables**, set `NEXT_PUBLIC_QUIRE_WEBSITE_URL` to `https://quire-app.vercel.app` (or your custom domain). Redeploy after changing it. The macOS app then opens that URL in the user&apos;s default browser, and the App Store privacy-policy URL will be:
+In **Vercel → Settings → Environment Variables**, set `NEXT_PUBLIC_QUIRE_WEBSITE_URL` to `https://quire-app.vercel.app` (or your custom domain). Redeploy after changing it. The desktop app then opens that URL in the user&apos;s default browser, and the public privacy-policy URL will be:
 
 ```text
 https://quire-app.vercel.app/privacy
@@ -192,7 +213,7 @@ Quire's core workflow runs on your machine:
 - The TeX compiler is the one installed on your computer.
 - There is no built-in authentication, telemetry pipeline, or cloud-sync requirement.
 
-Quire Draft is disabled until you add your own provider API key. When you explicitly ask it to help, Quire sends only the selected passage or writing brief and the requested action to the provider you chose; it never automatically uploads a project. Saved keys are stored with macOS Keychain. OpenRouter's free route is subject to availability and provider limits. Read the complete policy at [quire-app.vercel.app/privacy](https://quire-app.vercel.app/privacy).
+Quire Draft is disabled until you add your own provider API key. When you explicitly ask it to help, Quire sends only the selected passage or writing brief and the requested action to the provider you chose; it never automatically uploads a project. Saved keys are stored with your operating system&apos;s secure credential storage. OpenRouter's free route is subject to availability and provider limits. Read the complete policy at [quire-app.vercel.app/privacy](https://quire-app.vercel.app/privacy).
 
 As with any local development server, only run Quire on networks and machines you trust. See [SECURITY.md](SECURITY.md) for the current threat model and compiler safeguards.
 

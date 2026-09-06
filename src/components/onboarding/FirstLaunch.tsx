@@ -30,7 +30,8 @@ export interface OnboardingPreferences {
 
 interface FirstLaunchProps {
   onComplete: (preferences?: OnboardingPreferences) => void;
-  onCreateProject: (input: { name: string; template: OnboardingTemplate } & OnboardingPreferences) => Promise<boolean>;
+  onCreateProject: (input: { name: string; template: OnboardingTemplate } & OnboardingPreferences) => Promise<string | null>;
+  onProjectCreated: (projectId: string, preferences: OnboardingPreferences) => void;
   onOpenExisting: (preferences: OnboardingPreferences) => void;
 }
 
@@ -59,7 +60,7 @@ function resolvedTheme(appearance: Appearance) {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: FirstLaunchProps) {
+export function FirstLaunch({ onComplete, onCreateProject, onProjectCreated, onOpenExisting }: FirstLaunchProps) {
   const [scene, setScene] = useState<Scene>("blank");
   const [step, setStep] = useState<SetupStep>("appearance");
   const [typedMessage, setTypedMessage] = useState("");
@@ -189,13 +190,13 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
     }
   }
 
-  function persistPreferences() {
+  async function persistPreferences() {
     window.localStorage.setItem("quire:onboarding-complete", "true");
     window.localStorage.setItem("quire:default-project-settings", JSON.stringify(preferences));
     const desktop = (window as Window & {
       quireDesktop?: { completeOnboarding: () => Promise<void> };
     }).quireDesktop;
-    void desktop?.completeOnboarding();
+    await desktop?.completeOnboarding();
   }
 
   function moveTo(nextStep: SetupStep) {
@@ -203,7 +204,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
   }
 
   function skipSetup() {
-    persistPreferences();
+    void persistPreferences();
     onComplete(preferences);
   }
 
@@ -253,10 +254,16 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
           template,
           ...preferences,
         }),
-        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 20000)),
+        new Promise<string | null>((resolve) => window.setTimeout(() => resolve(null), 12000)),
       ]);
 
-      if (created) persistPreferences();
+      if (created) {
+        // Finish the native setup transition before navigating. On Windows,
+        // racing a route change with the first-window resize could leave the
+        // newly-created project stuck on its loading state.
+        await persistPreferences();
+        onProjectCreated(created, preferences);
+      }
       else setCreationError("Quire could not create that workspace. Check the name and try again, or open an existing project.");
     } catch {
       setCreationError("Quire could not create that workspace. Please try again.");
@@ -267,7 +274,7 @@ export function FirstLaunch({ onComplete, onCreateProject, onOpenExisting }: Fir
   }
 
   function openExisting() {
-    persistPreferences();
+    void persistPreferences();
     onOpenExisting(preferences);
   }
 

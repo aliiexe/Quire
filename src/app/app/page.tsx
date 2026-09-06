@@ -28,7 +28,7 @@ const projectTemplates: Array<{ id: OnboardingTemplate; eyebrow: string; title: 
 
 type CompilerStatus = {
   platform: string;
-  latexmkAvailable: boolean;
+  compilerAvailable: boolean;
   version?: string;
   installerName?: string;
   installerUrl?: string;
@@ -144,17 +144,22 @@ export default function Dashboard() {
   }, []);
 
   const requestProject = async (input: { name: string; template: OnboardingTemplate } & OnboardingPreferences) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
+        signal: controller.signal,
       });
       const data = await res.json();
       return typeof data.id === "string" ? data.id : null;
     } catch (error) {
       console.error(error);
       return null;
+    } finally {
+      window.clearTimeout(timeout);
     }
   };
 
@@ -175,10 +180,12 @@ export default function Dashboard() {
   };
 
   const handleOnboardingCreate = async (input: { name: string; template: OnboardingTemplate } & OnboardingPreferences) => {
-    const projectId = await requestProject(input);
-    if (!projectId) return false;
+    return requestProject(input);
+  };
+
+  const handleOnboardingProjectCreated = (projectId: string, preferences: OnboardingPreferences) => {
+    handleOnboardingComplete(preferences);
     router.push(`/project/${projectId}`);
-    return true;
   };
 
   const handleOnboardingOpenExisting = (preferences: OnboardingPreferences) => {
@@ -348,13 +355,13 @@ export default function Dashboard() {
             <p className="mt-4 max-w-lg text-sm leading-6 text-[var(--quire-muted)] sm:text-base">Create a new LaTeX project, bring in work you already have, or pick up exactly where you left off.</p>
           </section>
 
-          {compilerStatus?.platform === "win32" && !compilerStatus.latexmkAvailable ? (
+          {compilerStatus?.platform === "win32" && !compilerStatus.compilerAvailable ? (
             <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-[var(--quire-border)] bg-[var(--quire-surface)] p-5 shadow-[0_12px_30px_rgba(20,20,20,0.04)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div className="flex gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--quire-red-soft)] text-[var(--quire-red)]"><FileText className="h-5 w-5" /></span>
                 <div>
                   <p className="font-semibold tracking-[-0.02em]">Set up local PDF compilation</p>
-                  <p className="mt-1 max-w-xl text-sm leading-5 text-[var(--quire-muted)]">Quire is ready to edit. Install MiKTeX, or make TeX Live&apos;s <span className="font-mono text-[0.9em]">latexmk</span> available on this PC, to compile PDFs locally.</p>
+                  <p className="mt-1 max-w-xl text-sm leading-5 text-[var(--quire-muted)]">Quire is ready to edit. Install MiKTeX, or make TeX Live&apos;s <span className="font-mono text-[0.9em]">pdfLaTeX</span> available on this PC, to compile PDFs locally.</p>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -610,10 +617,11 @@ export default function Dashboard() {
       </Dialog.Root>
 
       {showOnboarding ? (
-        <FirstLaunch
-          onComplete={handleOnboardingComplete}
-          onCreateProject={handleOnboardingCreate}
-          onOpenExisting={handleOnboardingOpenExisting}
+          <FirstLaunch
+            onComplete={handleOnboardingComplete}
+            onCreateProject={handleOnboardingCreate}
+            onProjectCreated={handleOnboardingProjectCreated}
+            onOpenExisting={handleOnboardingOpenExisting}
         />
       ) : null}
     </div>

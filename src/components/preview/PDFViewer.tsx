@@ -36,6 +36,7 @@ export function PDFViewer({ url, onDownload, documentName, isCompiling = false, 
   const [baseDimensions, setBaseDimensions] = useState<PageDimensions | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
+  const viewerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -88,23 +89,31 @@ export function PDFViewer({ url, onDownload, documentName, isCompiling = false, 
     };
   }, [url]);
 
-  // ResizeObserver for Container Width
+  // Fit must measure the panel itself, not the scroll area. At startup the
+  // latter may still report its old content width, which made a full-width
+  // document permanently render as a tiny page.
   useLayoutEffect(() => {
-    const el = containerRef.current;
+    const el = viewerRef.current;
     if (!el) return;
-    // The resizable-panel library changes the width of its direct child.
-    // Measure both the scrolling element and its panel-sized parent: relying
-    // on the child alone can capture its initial shrink-to-content width.
     const measure = () => {
-      const ownWidth = el.getBoundingClientRect().width;
-      const parentWidth = el.parentElement?.getBoundingClientRect().width ?? 0;
-      setContainerWidth(Math.round(Math.max(ownWidth, parentWidth)));
+      const width = Math.round(el.getBoundingClientRect().width);
+      if (width > 0) setContainerWidth((current) => current === width ? current : width);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [url]); // Re-run this effect when URL changes (so the container is mounted)
+    const firstFrame = requestAnimationFrame(measure);
+    const secondFrame = requestAnimationFrame(() => requestAnimationFrame(measure));
+    const settleTimer = window.setTimeout(measure, 180);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.clearTimeout(settleTimer);
+      window.removeEventListener("resize", measure);
+    };
+  }, [url]);
 
   // Navigation
   const scrollToPage = useCallback((pageNum: number) => {
@@ -124,8 +133,8 @@ export function PDFViewer({ url, onDownload, documentName, isCompiling = false, 
 
   // Compute actual display width/height per page based on fit-width
   // We leave 48px total horizontal padding (24px each side)
-  const availableWidth = Math.max(containerWidth - 48, 100);
-  const fitScale = baseDimensions ? availableWidth / baseDimensions.width : 1;
+  const availableWidth = containerWidth > 0 ? Math.max(containerWidth - 48, 100) : baseDimensions?.width || 1;
+  const fitScale = baseDimensions && containerWidth > 0 ? availableWidth / baseDimensions.width : 1;
   const currentScale = fitScale * scale;
   const isFitWidth = scale === 1;
 
@@ -152,7 +161,7 @@ export function PDFViewer({ url, onDownload, documentName, isCompiling = false, 
   }
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col bg-[var(--quire-bg)]">
+    <div ref={viewerRef} className="flex h-full w-full min-w-0 flex-col bg-[var(--quire-bg)]">
       {/* PDF Toolbar */}
       <div className="h-12 border-b border-[var(--quire-border)] bg-[var(--quire-surface)] flex items-center justify-between px-4 shrink-0 shadow-sm z-10 relative">
         <div className="flex items-center gap-1.5 text-[12px] bg-[var(--quire-surface-secondary)] p-1 rounded-md border border-[var(--quire-border)] shadow-sm">

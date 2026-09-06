@@ -73,6 +73,27 @@ const editorTheme = EditorView.theme({
     backgroundPosition: "bottom left",
     backgroundRepeat: "repeat-x",
     paddingBottom: "2px"
+  },
+  // CodeMirror's default lint tooltip is light themed and can grow to the
+  // viewport width. Keep compiler feedback readable in both Quire themes.
+  ".cm-tooltip, .cm-tooltip.cm-tooltip-lint": {
+    maxWidth: "min(32rem, calc(100vw - 3rem))",
+    border: "1px solid var(--quire-border)",
+    borderRadius: "10px",
+    backgroundColor: "var(--quire-surface)",
+    color: "var(--quire-text)",
+    boxShadow: "0 14px 34px rgba(0,0,0,.22)",
+    overflow: "hidden"
+  },
+  ".cm-tooltip-lint ul, .cm-tooltip-lint li": {
+    maxWidth: "min(32rem, calc(100vw - 3rem))",
+    backgroundColor: "var(--quire-surface)",
+    color: "var(--quire-text)",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere"
+  },
+  ".cm-tooltip-lint li": {
+    padding: "10px 12px"
   }
 });
 
@@ -123,11 +144,12 @@ export function Editor({ value, onChange, language = "latex", diagnostics = [], 
       diagnostics.forEach(d => {
         if (d.line > 0 && d.line <= doc.lines) {
           const lineInfo = doc.line(d.line);
+          const compactMessage = d.message.replace(/\s+/g, " ").trim();
           cmDiagnostics.push({
             from: lineInfo.from,
             to: lineInfo.to,
             severity: d.severity,
-            message: d.message,
+            message: compactMessage.length > 360 ? `${compactMessage.slice(0, 357)}…` : compactMessage,
           });
         }
       });

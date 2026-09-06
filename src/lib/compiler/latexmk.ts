@@ -6,6 +6,16 @@ import { parseDiagnostics } from "./diagnostics";
 import fs from "fs/promises";
 import fsSync from "fs";
 
+type ProcessResult = {
+  code: number | null;
+  output: string;
+};
+
+// A user-install of MiKTeX can expose pdflatex.exe before its file-name
+// database and format files have been created. Prepare it once per Quire
+// server session, rather than leaving a first compilation to fail silently.
+const preparedMiKTeXInstallations = new Map<string, Promise<string>>();
+
 function findWindowsTexExecutable(executable: string): string | undefined {
   if (process.platform !== "win32") return undefined;
 
@@ -70,6 +80,93 @@ function compilerEnvironment(command: string) {
   };
 }
 
+function runProcess(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number): Promise<ProcessResult> {
+  return new Promise((resolve) => {
+    let output = "";
+    let settled = false;
+    const finish = (result: ProcessResult) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    let child: ChildProcess;
+    try {
+      child = spawn(command, args, { env, windowsHide: true });
+    } catch (error) {
+      finish({ code: null, output: error instanceof Error ? error.message : "Unable to start MiKTeX preparation." });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish({ code: null, output: "MiKTeX preparation timed out." });
+    }, timeoutMs);
+
+    child.stdout?.on("data", (data) => { output += data.toString(); });
+    child.stderr?.on("data", (data) => { output += data.toString(); });
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      finish({ code: null, output: `${output}\n${error.message}`.trim() });
+    });
+    child.once("close", (code) => {
+      clearTimeout(timeout);
+      finish({ code, output });
+    });
+  });
+}
+
+async function prepareWindowsMiKTeX(command: string, compiler: CompileRequest["compiler"]): Promise<string> {
+  if (process.platform !== "win32" || !/miktex/i.test(command)) return "";
+
+  const miktexCommand = path.join(path.dirname(command), "miktex.exe");
+  if (!fsSync.existsSync(miktexCommand)) return "";
+
+  const cacheKey = `${miktexCommand}:${compiler}`.toLowerCase();
+  let preparation = preparedMiKTeXInstallations.get(cacheKey);
+  if (!preparation) {
+    preparation = (async () => {
+      const environment = compilerEnvironment(command);
+      // These are documented MiKTeX user-mode maintenance commands. They
+      // initialise only the current user; Quire never requests admin access.
+      const database = await runProcess(miktexCommand, ["--enable-installer", "fndb", "refresh"], environment, 45_000);
+      const format = await runProcess(miktexCommand, ["--enable-installer", "formats", "build", compiler], environment, 45_000);
+      const output = [database.output, format.output].filter(Boolean).join("\n").trim();
+      if (database.code === 0 && format.code === 0) return output;
+      return output || "MiKTeX could not complete its first-run preparation.";
+    })();
+    preparedMiKTeXInstallations.set(cacheKey, preparation);
+  }
+
+  return preparation;
+}
+
+async function readWindowsMiKTeXLog(command: string): Promise<string> {
+  if (process.platform !== "win32" || !/miktex/i.test(command)) return "";
+
+  const executable = path.basename(command, path.extname(command));
+  const roots = [process.env.LOCALAPPDATA, process.env.APPDATA, process.env.ProgramData].filter((root): root is string => Boolean(root));
+  const logPaths = roots.map((root) => path.join(root, "MiKTeX", "miktex", "log", `${executable}.log`));
+
+  for (const logPath of logPaths) {
+    try {
+      const log = await fs.readFile(logPath, "utf8");
+      const meaningful = log
+        .split(/\r?\n/)
+        .filter((line) => /\b(?:FATAL|ERROR|major issue)\b/i.test(line))
+        .slice(-6)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .slice(0, 900);
+      if (meaningful) return `MiKTeX detail: ${meaningful}`;
+    } catch {
+      // MiKTeX creates this log only once it has started a compilation.
+    }
+  }
+
+  return "";
+}
+
 export class LatexmkCompiler implements LatexCompiler {
   private activeProcesses = new Map<string, ChildProcess>();
 
@@ -86,10 +183,14 @@ export class LatexmkCompiler implements LatexCompiler {
     // Ensure build dir exists
     await fs.mkdir(buildDir, { recursive: true });
 
+    const command = compilerCommand(input.compiler);
+    const preparationLog = await prepareWindowsMiKTeX(command, input.compiler);
+
     return new Promise((resolve) => {
       const useWindowsEngine = process.platform === "win32";
       const args = useWindowsEngine
         ? [
+          "--enable-installer",
           "-interaction=nonstopmode",
           "-file-line-error",
           input.synctex ? "-synctex=1" : "-synctex=0",
@@ -108,7 +209,6 @@ export class LatexmkCompiler implements LatexCompiler {
       else if (!useWindowsEngine && input.compiler === "lualatex") args.push("-lualatex");
       if (!useWindowsEngine) args.push(input.rootFile);
 
-      const command = compilerCommand(input.compiler);
       const child = spawn(command, args, {
         cwd: projectPath,
         // On Windows we invoke the actual MiKTeX engine directly instead of
@@ -129,11 +229,10 @@ export class LatexmkCompiler implements LatexCompiler {
 
       child.on("close", async (code) => {
         this.activeProcesses.delete(taskId);
-        
-        const rawLog = `${stdout}\n${stderr}`;
-        const diagnostics = parseDiagnostics(rawLog);
-        
         let success = code === 0;
+        const miktexLog = !success ? await readWindowsMiKTeXLog(command) : "";
+        const rawLog = [preparationLog, stdout, stderr, miktexLog].filter(Boolean).join("\n");
+        const diagnostics = parseDiagnostics(rawLog);
         
         // DO NOT TRUST EXIT CODE ALONE
         // Verify the expected PDF exists and was modified recently

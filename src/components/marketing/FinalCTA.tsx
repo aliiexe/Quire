@@ -1,9 +1,11 @@
 import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { CloudLightning } from "./CloudLightning";
 import { PlatformDownloadLink } from "./PlatformDownloadLink";
 
 export function FinalCTA() {
   return (
     <section className="mk-final mk-atmosphere relative overflow-hidden">
+      <CloudLightning />
       <div className="mk-grid relative z-10">
         <p className="mk-eyebrow">A better home for LaTeX</p>
         <h2 className="mk-display">Your next document<br />starts here.</h2>

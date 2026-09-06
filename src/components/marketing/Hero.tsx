@@ -4,6 +4,7 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { QUIRE_REPOSITORY_URL } from "@/lib/links";
+import { CloudLightning } from "./CloudLightning";
 import { PlatformDownloadLink } from "./PlatformDownloadLink";
 
 export function Hero() {
@@ -32,6 +33,7 @@ export function Hero() {
 
   return (
     <section ref={container} className="mk-hero mk-atmosphere relative overflow-hidden">
+      <CloudLightning />
       <div className="mk-grid">
         <div className="mk-hero__copy">
           <p data-hero="eyebrow" className="mk-eyebrow">Local LaTeX workspace</p>

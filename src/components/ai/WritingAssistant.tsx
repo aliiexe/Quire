@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, FilePenLine, Loader2, Sparkles, X } from "lucide-react";
 
@@ -8,6 +8,11 @@ export type WritingSelection = {
   from: number;
   to: number;
   text: string;
+};
+
+export type DiagnosticFixRequest = {
+  id: string;
+  instruction: string;
 };
 
 type AssistantMode = "improve" | "correct" | "shorten" | "explain" | "custom" | "draft";
@@ -27,6 +32,8 @@ interface WritingAssistantProps {
   activeFileName: string | null;
   onPreviewSuggestion: (replacement: string, selection: WritingSelection) => boolean;
   onPreviewDocument: (replacement: string) => boolean;
+  diagnosticFixRequest?: DiagnosticFixRequest | null;
+  onDiagnosticFixRequestHandled?: () => void;
 }
 
 const actions: Array<{ id: Exclude<AssistantMode, "draft" | "custom">; label: string; description: string }> = [
@@ -36,7 +43,7 @@ const actions: Array<{ id: Exclude<AssistantMode, "draft" | "custom">; label: st
   { id: "explain", label: "Review", description: "Practical editorial feedback" },
 ];
 
-export function WritingAssistant({ selection, activeFileName, onPreviewSuggestion, onPreviewDocument }: WritingAssistantProps) {
+export function WritingAssistant({ selection, activeFileName, onPreviewSuggestion, onPreviewDocument, diagnosticFixRequest = null, onDiagnosticFixRequestHandled }: WritingAssistantProps) {
   const [open, setOpen] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [providerLabel, setProviderLabel] = useState("AI provider");
@@ -49,6 +56,7 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
   const [instruction, setInstruction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [pendingDiagnosticFix, setPendingDiagnosticFix] = useState<DiagnosticFixRequest | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,14 +104,17 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
     setNotice("");
   };
 
-  const requestAssistance = async (nextMode: AssistantMode) => {
+  const isDraft = workspaceMode === "draft";
+
+  const requestAssistance = useCallback(async (nextMode: AssistantMode, instructionOverride?: string) => {
     const bridge = aiBridge();
     const requestText = nextMode === "draft" ? brief.trim() : selection?.text.trim();
+    const requestedInstruction = instructionOverride?.trim() || instruction.trim();
     if (!requestText) {
       setError(nextMode === "draft" ? "Describe the document you want to make first." : "Select the passage you want help with in the editor first.");
       return;
     }
-    if (nextMode === "custom" && !instruction.trim()) {
+    if (nextMode === "custom" && !requestedInstruction) {
       setError("Write your request first, then Quire Draft can follow it.");
       return;
     }
@@ -117,7 +128,7 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
     setNotice("");
     setOutput("");
     try {
-      const result = await bridge.assistWriting({ selection: requestText, mode: nextMode, instruction: isDraft ? undefined : instruction.trim() || undefined });
+      const result = await bridge.assistWriting({ selection: requestText, mode: nextMode, instruction: isDraft ? undefined : requestedInstruction || undefined });
       if (result.ok === false || !result.output) {
         throw new Error(result.error || "Quire Draft returned an empty response. Try again.");
       }
@@ -127,7 +138,37 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
     } finally {
       setWorking(false);
     }
-  };
+  }, [brief, instruction, isDraft, selection]);
+
+  useEffect(() => {
+    if (!diagnosticFixRequest) return;
+    setWorkspaceMode("selection");
+    setMode("custom");
+    setInstruction(diagnosticFixRequest.instruction);
+    setOutput("");
+    setError("");
+    setNotice("Quire Draft is preparing a repair proposal for this compiler error.");
+    setPendingDiagnosticFix(diagnosticFixRequest);
+    setOpen(true);
+    onDiagnosticFixRequestHandled?.();
+  }, [diagnosticFixRequest, onDiagnosticFixRequestHandled]);
+
+  useEffect(() => {
+    if (!pendingDiagnosticFix || !open || loadingSettings || working) return;
+    if (!keyConfigured) {
+      setPendingDiagnosticFix(null);
+      setError("Add your API key in Settings → Quire Draft, then request this fix again.");
+      return;
+    }
+    if (!selection?.text.trim()) {
+      setPendingDiagnosticFix(null);
+      setError("Quire could not select the line that caused this error. Select it and try again.");
+      return;
+    }
+
+    setPendingDiagnosticFix(null);
+    void requestAssistance("custom", pendingDiagnosticFix.instruction);
+  }, [keyConfigured, loadingSettings, open, pendingDiagnosticFix, requestAssistance, selection?.text, working]);
 
   const previewSuggestion = () => {
     if (!selection || !output) return;
@@ -150,8 +191,6 @@ export function WritingAssistant({ selection, activeFileName, onPreviewSuggestio
       setError("Open an editable text file first, and finish reviewing any suggestion already in progress.");
     }
   };
-
-  const isDraft = workspaceMode === "draft";
 
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => {

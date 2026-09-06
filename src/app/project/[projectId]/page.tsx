@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, PanelImperativeHandle } from "react-resizable-panels";
 import { useRef } from "react";
-import { FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen, Upload, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, FilePlus, FolderPlus, Play, Settings, X, Sun, Moon, PanelLeftClose, PanelLeftOpen, Upload, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { QuireMark } from "@/components/brand/logo";
@@ -17,7 +17,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { LatexDiagnostic } from "@/lib/compiler/compiler";
 import type { Project, ProjectNode } from "@/lib/projects/storage";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { WritingAssistant, type WritingSelection } from "@/components/ai/WritingAssistant";
+import { WritingAssistant, type DiagnosticFixRequest, type WritingSelection } from "@/components/ai/WritingAssistant";
 import { applyThemeWithFade } from "@/lib/theme";
 
 const EDITABLE_TEXT_EXTENSIONS = new Set([".tex", ".txt", ".bib", ".sty", ".cls", ".md", ".json", ".yaml", ".yml"]);
@@ -79,6 +79,8 @@ export default function Workspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [isFileDropActive, setIsFileDropActive] = useState(false);
   const [assistantSelection, setAssistantSelection] = useState<WritingSelection | null>(null);
+  const [diagnosticFixRequest, setDiagnosticFixRequest] = useState<DiagnosticFixRequest | null>(null);
+  const [copiedDiagnosticKey, setCopiedDiagnosticKey] = useState<string | null>(null);
   const [assistantProposal, setAssistantProposal] = useState<AssistantProposal | null>(null);
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
   const [nodePendingDeletion, setNodePendingDeletion] = useState<ProjectNode | null>(null);
@@ -281,6 +283,78 @@ export default function Workspace() {
   const handleAssistantSelection = useCallback((selection: WritingSelection) => {
     setAssistantSelection(selection.text ? selection : null);
   }, []);
+
+  const copyDiagnostic = useCallback(async (diagnostic: LatexDiagnostic, key: string) => {
+    const location = [diagnostic.file || activeFile || "source", diagnostic.line ? `line ${diagnostic.line}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    const contents = `${diagnostic.severity === "error" ? "Error" : "Warning"} — ${location}\n${diagnostic.message}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(contents);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = contents;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        textarea.remove();
+        if (!copied) throw new Error("Copy was not available");
+      }
+      setCopiedDiagnosticKey(key);
+      window.setTimeout(() => setCopiedDiagnosticKey((current) => current === key ? null : current), 1800);
+    } catch {
+      setDiagnostics([{ severity: "error", message: "Quire could not copy this diagnostic. Select the text in the details panel and copy it manually." }]);
+    }
+  }, [activeFile, setDiagnostics]);
+
+  const requestDiagnosticFix = useCallback(async (diagnostic: LatexDiagnostic) => {
+    const targetFile = diagnostic.file || activeFile || project?.rootFile;
+    if (!targetFile) {
+      setDiagnostics([{ severity: "error", message: "Open the file with this error before asking Quire Draft to repair it." }]);
+      return;
+    }
+
+    try {
+      let content = activeFile === targetFile ? fileContents[targetFile] || "" : "";
+      if (!content) {
+        const response = await fetch(`/api/projects/${params.projectId}/files?path=${encodeURIComponent(targetFile)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Quire could not read the source file for this diagnostic.");
+        content = typeof data.content === "string" ? data.content : "";
+      }
+
+      const lineNumber = Math.max(1, Math.min(diagnostic.line || 1, content.split(/\r?\n/).length));
+      let from = 0;
+      for (let index = 1; index < lineNumber; index += 1) {
+        const lineBreak = content.indexOf("\n", from);
+        if (lineBreak === -1) break;
+        from = lineBreak + 1;
+      }
+      const nextLineBreak = content.indexOf("\n", from);
+      const to = nextLineBreak === -1 ? content.length : nextLineBreak;
+      const selectedText = content.slice(from, to);
+      if (!selectedText.trim()) throw new Error("This diagnostic does not point to a source line Quire can repair.");
+
+      if (targetFile !== activeFile) await handleSelectFile(targetFile);
+      // Selecting a different editor tab clears stale selections. Wait one
+      // frame so the new editor is mounted before opening Quire Draft.
+      requestAnimationFrame(() => {
+        setAssistantSelection({ from, to, text: selectedText });
+        setDiagnosticFixRequest({
+          id: crypto.randomUUID(),
+          instruction: `Fix the LaTeX compiler error on ${targetFile}, line ${lineNumber}. Return only the replacement for the selected source line(s), with no explanation or Markdown fences. Preserve the document's language, formatting, and all unrelated LaTeX syntax. Compiler message: ${diagnostic.message.replace(/\s+/g, " ").trim()}`,
+        });
+        setShowDiagnostics(false);
+      });
+    } catch (error) {
+      setDiagnostics([{ severity: "error", message: error instanceof Error ? error.message : "Quire could not prepare a repair suggestion." }]);
+    }
+  }, [activeFile, fileContents, handleSelectFile, params.projectId, project?.rootFile, setDiagnostics]);
 
   const discardDraftPreview = useCallback((token: string) => {
     void fetch(`/api/projects/${params.projectId}/draft-preview?token=${encodeURIComponent(token)}`, {
@@ -723,15 +797,19 @@ export default function Workspace() {
   }, [activeFile, compileProject, project?.autoCompile]);
 
   const visibleAssistantProposal = assistantProposal?.filePath === activeFile ? assistantProposal : null;
+  const errorCount = diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
+  const warningCount = diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length;
   
   return (
-    <div className="quire-workspace h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden" onDragEnter={handleWorkspaceDragEnter} onDragOver={handleWorkspaceDragOver} onDragLeave={handleWorkspaceDragLeave} onDrop={handleWorkspaceDrop}>
+    <div className="quire-workspace relative h-screen flex flex-col bg-[var(--quire-bg)] text-[var(--quire-text)] overflow-hidden" onDragEnter={handleWorkspaceDragEnter} onDragOver={handleWorkspaceDragOver} onDragLeave={handleWorkspaceDragLeave} onDrop={handleWorkspaceDrop}>
       <QuickOpen isOpen={isQuickOpen} onClose={() => setIsQuickOpen(false)} />
       <WritingAssistant
         selection={assistantSelection}
         activeFileName={activeFile}
         onPreviewSuggestion={previewAssistantSuggestion}
         onPreviewDocument={previewActiveDocumentFromDraft}
+        diagnosticFixRequest={diagnosticFixRequest}
+        onDiagnosticFixRequestHandled={() => setDiagnosticFixRequest(null)}
       />
       {assistantProposal && (
         <aside className="fixed bottom-14 left-1/2 z-[60] flex w-[min(calc(100vw-2rem),38rem)] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-4 py-3 text-[var(--quire-text)] shadow-[0_18px_44px_rgba(0,0,0,.22)] backdrop-blur-xl" aria-label="Quire Draft suggestion review">
@@ -1068,7 +1146,7 @@ export default function Workspace() {
                 <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--quire-muted)]">{visibleAssistantProposal.compileDiagnostics.find((diagnostic) => diagnostic.severity === "error")?.message || "Review the highlighted source, then reject it or apply it and continue editing."}</p>
               </div>
             ) : (
-              <div className="relative h-full">
+              <div className="relative h-full w-full min-w-0">
                 {visibleAssistantProposal && <div className="pointer-events-none absolute left-3 top-[3.75rem] z-20 rounded-lg border border-[var(--quire-red)]/25 bg-[color-mix(in_srgb,var(--quire-surface)_94%,transparent)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--quire-text-secondary)] shadow-sm backdrop-blur-xl"><span className="mr-1 text-[var(--quire-red)]">✦</span> Quire Draft temporary PDF preview</div>}
                 <PDFViewer
                   url={visibleAssistantProposal ? `/api/projects/${params.projectId}/draft-preview?token=${encodeURIComponent(visibleAssistantProposal.id)}` : previewedAsset?.kind === "pdf" ? `/api/projects/${params.projectId}/asset?path=${encodeURIComponent(previewedAsset.path)}` : `/api/projects/${params.projectId}/pdf?rev=${pdfRevision}`}
@@ -1084,50 +1162,54 @@ export default function Workspace() {
       </div>
       
       {/* Diagnostics / Status Bar */}
-      <footer className="h-8 border-t border-[var(--quire-border)] bg-[var(--quire-surface)] shrink-0 flex items-center justify-between px-4 text-[10px] text-[var(--quire-muted)]">
-        <div className="flex items-center gap-4">
-          <span 
-            className="flex items-center gap-1.5 cursor-pointer hover:text-[var(--quire-text)] transition-colors"
-            onClick={() => setShowDiagnostics(!showDiagnostics)}
+      <footer className="flex h-11 shrink-0 items-center justify-between border-t border-[var(--quire-border)] bg-[var(--quire-surface)] px-3 text-xs text-[var(--quire-muted)] sm:px-4">
+        <div className="flex items-center gap-2" aria-label="Compiler status">
+          <button
+            type="button"
+            onClick={() => setShowDiagnostics((current) => !current)}
+            aria-expanded={showDiagnostics}
+            className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-semibold transition-colors ${errorCount > 0 ? "border-[var(--quire-red)]/25 bg-[var(--quire-red-soft)] text-[var(--quire-red)] hover:border-[var(--quire-red)]/50" : "border-transparent text-[var(--quire-muted)] hover:bg-[var(--quire-hover)]"}`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${diagnostics.some(d => d.severity === 'error') ? 'bg-[var(--quire-red)]' : 'bg-[var(--quire-muted)]'}`}></span>
-            {diagnostics.filter(d => d.severity === 'error').length} errors
-          </span>
-          <span 
-            className="flex items-center gap-1.5 cursor-pointer hover:text-[var(--quire-text)] transition-colors"
-            onClick={() => setShowDiagnostics(!showDiagnostics)}
+            <span className={`h-2 w-2 rounded-full ${errorCount > 0 ? "bg-[var(--quire-red)] shadow-[0_0_0_3px_var(--quire-red-soft)]" : "bg-[var(--quire-muted)]/55"}`} />
+            {errorCount} {errorCount === 1 ? "error" : "errors"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDiagnostics((current) => !current)}
+            aria-expanded={showDiagnostics}
+            className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-semibold transition-colors ${warningCount > 0 ? "border-amber-400/30 bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:border-amber-400/55" : "border-transparent text-[var(--quire-muted)] hover:bg-[var(--quire-hover)]"}`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${diagnostics.some(d => d.severity === 'warning') ? 'bg-yellow-500' : 'bg-[var(--quire-muted)]'}`}></span>
-            {diagnostics.filter(d => d.severity === 'warning').length} warnings
-          </span>
+            <span className={`h-2 w-2 rounded-full ${warningCount > 0 ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,.12)]" : "bg-[var(--quire-muted)]/55"}`} />
+            {warningCount} {warningCount === 1 ? "warning" : "warnings"}
+          </button>
         </div>
-        <div>
-          {diagnostics.length > 0 && (
-            <button 
-              className="hover:text-[var(--quire-text)] underline underline-offset-2"
-              onClick={() => setShowDiagnostics(!showDiagnostics)}
-            >
-              {showDiagnostics ? 'Hide details' : 'View details'}
-            </button>
-          )}
-        </div>
+        {diagnostics.length > 0 && (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-semibold text-[var(--quire-text-secondary)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]"
+            onClick={() => setShowDiagnostics((current) => !current)}
+          >
+            <AlertTriangle className={`h-3.5 w-3.5 ${errorCount > 0 ? "text-[var(--quire-red)]" : "text-amber-500"}`} />
+            {showDiagnostics ? "Hide details" : "View details"}
+          </button>
+        )}
       </footer>
       
       {/* Diagnostics Drawer */}
       {showDiagnostics && (
-        <div className="absolute bottom-8 left-0 right-0 h-64 bg-[var(--quire-surface)] border-t border-[var(--quire-border)] shadow-lg flex flex-col z-10">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--quire-border)]">
-            <span className="font-medium text-sm">Diagnostics</span>
-            <X className="w-4 h-4 cursor-pointer text-[var(--quire-muted)] hover:text-[var(--quire-text)]" onClick={() => setShowDiagnostics(false)} />
+        <section className="absolute inset-x-3 bottom-14 z-50 flex max-h-[min(31rem,calc(100vh-7.5rem))] min-h-56 flex-col overflow-hidden rounded-2xl border border-[var(--quire-border)] bg-[color-mix(in_srgb,var(--quire-surface)_97%,transparent)] shadow-[0_20px_54px_rgba(0,0,0,.22)] backdrop-blur-xl sm:inset-x-5" aria-label="Compiler diagnostics">
+          <div className="flex items-center justify-between border-b border-[var(--quire-border)] px-4 py-3">
+            <div><h2 className="text-sm font-semibold text-[var(--quire-text)]">Compiler details</h2><p className="mt-0.5 text-xs text-[var(--quire-muted)]">Choose a diagnostic to jump to its source line.</p></div>
+            <button type="button" className="rounded-lg p-2 text-[var(--quire-muted)] transition-colors hover:bg-[var(--quire-hover)] hover:text-[var(--quire-text)]" onClick={() => setShowDiagnostics(false)} aria-label="Close compiler details"><X className="h-4 w-4" /></button>
           </div>
-          <div className="flex-1 overflow-auto p-4 text-sm font-mono space-y-4">
+          <div className="flex-1 space-y-3 overflow-auto p-3 sm:p-4">
             {diagnostics.length === 0 ? (
-              <div className="text-[var(--quire-muted)] text-center mt-8">No diagnostics to show.</div>
+              <div className="mt-8 text-center text-sm text-[var(--quire-muted)]">No diagnostics to show.</div>
             ) : (
               diagnostics.map((diag, i) => (
                 <div 
                   key={i} 
-                  className="flex gap-4 items-start cursor-pointer hover:bg-[var(--quire-hover)] p-2 rounded transition-colors"
+                  className={`group cursor-pointer rounded-xl border p-3.5 transition-colors ${diag.severity === "error" ? "border-[var(--quire-red)]/20 bg-[var(--quire-red-soft)]/45 hover:border-[var(--quire-red)]/40" : "border-amber-400/20 bg-amber-400/5 hover:border-amber-400/40"}`}
                   onClick={async () => {
                     const targetFile = diag.file || "main.tex";
                     if (targetFile !== activeFile) {
@@ -1138,18 +1220,43 @@ export default function Workspace() {
                     }, 100);
                   }}
                 >
-                  <span className={`shrink-0 uppercase text-xs font-bold ${diag.severity === 'error' ? 'text-[var(--quire-red)]' : 'text-yellow-500'}`}>
-                    {diag.severity}
-                  </span>
-                  <div>
-                    <div className="font-semibold">{diag.file}:{diag.line}</div>
-                    <div className="whitespace-pre-wrap mt-1 text-[var(--quire-muted)]">{diag.message}</div>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg ${diag.severity === "error" ? "bg-[var(--quire-red)] text-white" : "bg-amber-400/20 text-amber-700 dark:text-amber-300"}`}><AlertTriangle className="h-4 w-4" /></span>
+                    <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><div className={`text-[11px] font-bold uppercase tracking-[0.12em] ${diag.severity === "error" ? "text-[var(--quire-red)]" : "text-amber-700 dark:text-amber-300"}`}>{diag.severity}</div><div className="font-mono text-[11px] text-[var(--quire-muted)]">{diag.file || "main.tex"}{diag.line ? `:${diag.line}` : ""}</div></div>
+                    <div className="mt-2 max-w-4xl whitespace-pre-wrap break-words font-mono text-xs leading-5 text-[var(--quire-text-secondary)]">{diag.message}</div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void copyDiagnostic(diag, `${i}:${diag.file || "main.tex"}:${diag.line || 0}`);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--quire-border)] bg-[var(--quire-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--quire-text-secondary)] transition-colors hover:border-[var(--quire-text)]/20 hover:text-[var(--quire-text)]"
+                      >
+                        {copiedDiagnosticKey === `${i}:${diag.file || "main.tex"}:${diag.line || 0}` ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedDiagnosticKey === `${i}:${diag.file || "main.tex"}:${diag.line || 0}` ? "Copied" : "Copy error"}
+                      </button>
+                    {diag.severity === "error" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void requestDiagnosticFix(diag);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--quire-red)]/30 bg-[var(--quire-red-soft)] px-2.5 py-1.5 text-xs font-semibold text-[var(--quire-red)] transition-colors hover:border-[var(--quire-red)] hover:bg-[var(--quire-red)] hover:text-white"
+                      >
+                        <span aria-hidden="true">✦</span> Fix with Quire Draft
+                      </button>
+                    )}
+                    </div>
+                    </div>
                   </div>
                 </div>
               ))
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

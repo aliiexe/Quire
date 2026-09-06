@@ -134,7 +134,6 @@ html.quire-theme-transition body *::after {
 .quire-onboarding__template-card { min-height:7.55rem; }
 
 html[data-quire-desktop="true"] .quire-workspace-header { padding-left:7rem; }
-html[data-quire-desktop="true"] .quire-dashboard__header { padding-left:6rem; }
 html[data-quire-desktop="true"] .quire-workspace-header,
 html[data-quire-desktop="true"] .quire-dashboard__header { -webkit-app-region:drag; }
 html[data-quire-desktop="true"] .quire-workspace-header a,

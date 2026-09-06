@@ -11,6 +11,7 @@ interface PDFViewerProps {
   onDownload?: () => void;
   documentName?: string;
   isCompiling?: boolean;
+  compileError?: string;
 }
 
 interface PageDimensions {
@@ -23,7 +24,7 @@ interface PdfRenderTask {
   cancel: () => void;
 }
 
-export function PDFViewer({ url, onDownload, documentName, isCompiling = false }: PDFViewerProps) {
+export function PDFViewer({ url, onDownload, documentName, isCompiling = false, compileError = "" }: PDFViewerProps) {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -145,7 +146,7 @@ export function PDFViewer({ url, onDownload, documentName, isCompiling = false }
     return (
       <div className="flex flex-col items-center justify-center h-full text-[var(--quire-muted)]">
         <span className="text-sm">No PDF yet</span>
-        <span className="mt-1 max-w-xs text-center text-xs leading-5">{loadError || "Compile this project to generate a preview."}</span>
+        <span className={`mt-1 max-w-md text-center text-xs leading-5 ${compileError ? "text-[var(--quire-red)]" : ""}`}>{compileError || loadError || "Compile this project to generate a preview."}</span>
       </div>
     );
   }

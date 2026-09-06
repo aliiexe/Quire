@@ -6,17 +6,17 @@ import { parseDiagnostics } from "./diagnostics";
 import fs from "fs/promises";
 import fsSync from "fs";
 
-function findWindowsLatexmk(): string | undefined {
+function findWindowsTexExecutable(executable: string): string | undefined {
   if (process.platform !== "win32") return undefined;
 
   const candidates: string[] = [];
   const addRoot = (root?: string) => {
     if (!root) return;
     candidates.push(
-      path.join(root, "miktex", "bin", "x64", "latexmk.exe"),
-      path.join(root, "miktex", "bin", "latexmk.exe"),
-      path.join(root, "bin", "x64", "latexmk.exe"),
-      path.join(root, "bin", "latexmk.exe"),
+      path.join(root, "miktex", "bin", "x64", executable),
+      path.join(root, "miktex", "bin", executable),
+      path.join(root, "bin", "x64", executable),
+      path.join(root, "bin", executable),
     );
   };
 
@@ -45,12 +45,19 @@ function findWindowsLatexmk(): string | undefined {
   return undefined;
 }
 
-function compilerCommand() {
-  const discoveredWindowsCommand = findWindowsLatexmk();
+function latexmkCommand() {
+  const configuredCommand = process.env.QUIRE_LATEXMK_COMMAND;
+  if (configuredCommand && (!path.isAbsolute(configuredCommand) || fsSync.existsSync(configuredCommand))) return configuredCommand;
+  return "latexmk";
+}
+
+function compilerCommand(compiler: CompileRequest["compiler"]) {
+  const windowsEngine = compiler === "xelatex" ? "xelatex.exe" : compiler === "lualatex" ? "lualatex.exe" : "pdflatex.exe";
+  const discoveredWindowsCommand = findWindowsTexExecutable(windowsEngine);
   const configuredCommand = process.env.QUIRE_LATEXMK_COMMAND;
   if (discoveredWindowsCommand) return discoveredWindowsCommand;
-  if (configuredCommand && (!path.isAbsolute(configuredCommand) || fsSync.existsSync(configuredCommand))) return configuredCommand;
-  return process.platform === "win32" ? "latexmk.exe" : "latexmk";
+  if (process.platform === "win32") return windowsEngine;
+  return configuredCommand && (!path.isAbsolute(configuredCommand) || fsSync.existsSync(configuredCommand)) ? configuredCommand : latexmkCommand();
 }
 
 function compilerEnvironment(command: string) {
@@ -80,30 +87,33 @@ export class LatexmkCompiler implements LatexCompiler {
     await fs.mkdir(buildDir, { recursive: true });
 
     return new Promise((resolve) => {
-      const args = [
-        "-pdf",
-        "-interaction=nonstopmode",
-        "-file-line-error",
-        input.synctex ? "-synctex=1" : "-synctex=0",
-        `-outdir=${buildDir}`,
-      ];
+      const useWindowsEngine = process.platform === "win32";
+      const args = useWindowsEngine
+        ? [
+          "-interaction=nonstopmode",
+          "-file-line-error",
+          input.synctex ? "-synctex=1" : "-synctex=0",
+          `-output-directory=${buildDir}`,
+          input.rootFile,
+        ]
+        : [
+          "-pdf",
+          "-interaction=nonstopmode",
+          "-file-line-error",
+          input.synctex ? "-synctex=1" : "-synctex=0",
+          `-outdir=${buildDir}`,
+        ];
 
-      // Select engine
-      if (input.compiler === "xelatex") {
-        args.push("-xelatex");
-      } else if (input.compiler === "lualatex") {
-        args.push("-lualatex");
-      }
+      if (!useWindowsEngine && input.compiler === "xelatex") args.push("-xelatex");
+      else if (!useWindowsEngine && input.compiler === "lualatex") args.push("-lualatex");
+      if (!useWindowsEngine) args.push(input.rootFile);
 
-      args.push(input.rootFile);
-
-      const command = compilerCommand();
+      const command = compilerCommand(input.compiler);
       const child = spawn(command, args, {
         cwd: projectPath,
-        // The packaged Windows app starts its local server before a user may
-        // install MiKTeX. Preserve Quire's explicitly discovered TeX path
-        // rather than replacing it with whichever casing Windows happened to
-        // give the inherited Path variable.
+        // On Windows we invoke the actual MiKTeX engine directly instead of
+        // assuming latexmk was installed with it. This also finds a MiKTeX
+        // installation added while Quire is already open.
         env: compilerEnvironment(command),
         timeout: parseInt(process.env.QUIRE_COMPILE_TIMEOUT_MS || "60000", 10),
         windowsHide: true,
@@ -120,7 +130,7 @@ export class LatexmkCompiler implements LatexCompiler {
       child.on("close", async (code) => {
         this.activeProcesses.delete(taskId);
         
-        const rawLog = stdout + "\\n" + stderr;
+        const rawLog = `${stdout}\n${stderr}`;
         const diagnostics = parseDiagnostics(rawLog);
         
         let success = code === 0;
@@ -141,6 +151,22 @@ export class LatexmkCompiler implements LatexCompiler {
             });
           }
         }
+
+        if (!success && !diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+          const detail = rawLog
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line && !/^this is |^entering extended mode/i.test(line))
+            .slice(-4)
+            .join(" ")
+            .slice(0, 420);
+          diagnostics.push({
+            severity: "error",
+            message: detail
+              ? `Local compilation stopped: ${detail}`
+              : "Local compilation stopped without returning a diagnostic. Confirm that your TeX installation can run pdfLaTeX, then try again.",
+          });
+        }
         
         resolve({
           success,
@@ -152,12 +178,13 @@ export class LatexmkCompiler implements LatexCompiler {
 
       child.on("error", (error) => {
         this.activeProcesses.delete(taskId);
+        const executable = path.basename(command);
         resolve({
           success: false,
           diagnostics: [{
             severity: "error",
             message: process.platform === "win32"
-              ? "Quire could not start MiKTeX. Install MiKTeX, then choose Check again from Quire's home screen or restart Quire."
+              ? `Quire could not start ${executable}. Install or finish setting up MiKTeX, then return to the home screen and choose Check again. (${error.message})`
               : `Compiler process failed to start: ${error.message}`
           }],
           rawLog: error.message,

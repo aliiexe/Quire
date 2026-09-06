@@ -75,6 +75,7 @@ export default function Workspace() {
   const [newFolderPath, setNewFolderPath] = useState("");
   const [newFolderError, setNewFolderError] = useState("");
   const [previewedAsset, setPreviewedAsset] = useState<ProjectAsset | null>(null);
+  const [compileError, setCompileError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isFileDropActive, setIsFileDropActive] = useState(false);
   const [assistantSelection, setAssistantSelection] = useState<WritingSelection | null>(null);
@@ -176,11 +177,14 @@ export default function Workspace() {
     compileInFlightRef.current = true;
 
     try {
+      setCompileError("");
       if (flushDirty) {
         const dirtyPaths = Object.keys(isDirty).filter((path) => isDirty[path]);
         const saved = await saveDirtyFiles(dirtyPaths);
         if (!saved) {
-          setDiagnostics([{ severity: "error", message: "Unable to save all changes before compiling." }]);
+          const message = "Unable to save all changes before compiling.";
+          setDiagnostics([{ severity: "error", message }]);
+          setCompileError(message);
           return;
         }
       }
@@ -190,15 +194,24 @@ export default function Workspace() {
       const data = await response.json();
 
       if (!response.ok) {
-        setDiagnostics([{ severity: "error", message: data.error || "Compilation failed." }]);
+        const message = data.error || "Compilation failed.";
+        setDiagnostics([{ severity: "error", message }]);
+        setCompileError(message);
         return;
       }
 
       setDiagnostics(data.diagnostics || []);
-      if (data.success) incrementPdfRevision();
+      if (data.success) {
+        incrementPdfRevision();
+      } else {
+        const message = (data.diagnostics || []).find((diagnostic: LatexDiagnostic) => diagnostic.severity === "error")?.message || "Compilation failed without a diagnostic.";
+        setCompileError(message);
+      }
     } catch (error) {
       console.error("Failed to compile", error);
-      setDiagnostics([{ severity: "error", message: "Compilation could not be completed." }]);
+      const message = "Compilation could not be completed.";
+      setDiagnostics([{ severity: "error", message }]);
+      setCompileError(message);
     } finally {
       setCompiling(false);
       compileInFlightRef.current = false;
@@ -1062,6 +1075,7 @@ export default function Workspace() {
                   documentName={visibleAssistantProposal ? "Quire Draft preview.pdf" : previewedAsset?.kind === "pdf" ? previewedAsset.path.split("/").pop() : undefined}
                   onDownload={visibleAssistantProposal || previewedAsset?.kind === "pdf" ? undefined : () => void downloadPdf()}
                   isCompiling={isCompiling}
+                  compileError={compileError}
                 />
               </div>
             )}

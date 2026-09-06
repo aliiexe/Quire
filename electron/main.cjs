@@ -569,6 +569,20 @@ function latexmkCommand() {
   return executable;
 }
 
+function latexEngineCommand() {
+  const executable = process.platform === "win32" ? "pdflatex.exe" : "pdflatex";
+  for (const directory of latexPath().split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, executable);
+    try {
+      if (fsSync.statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Continue looking through the remaining TeX locations.
+    }
+  }
+  return executable;
+}
+
 function latexEnvironment() {
   const compilerPath = latexPath();
   return {
@@ -594,32 +608,33 @@ function getCompilerStatus() {
     let child;
 
     try {
-      child = spawn(latexmkCommand(), ["-v"], {
+      const command = process.platform === "win32" ? latexEngineCommand() : latexmkCommand();
+      child = spawn(command, [process.platform === "win32" ? "--version" : "-v"], {
         env: latexEnvironment(),
         windowsHide: true,
       });
     } catch {
-      finish({ platform: process.platform, latexmkAvailable: false });
+      finish({ platform: process.platform, compilerAvailable: false });
       return;
     }
 
     const timeout = setTimeout(() => {
       child.kill();
-      finish({ platform: process.platform, latexmkAvailable: false });
+      finish({ platform: process.platform, compilerAvailable: false });
     }, 5000);
 
     child.stdout?.on("data", (data) => { output += data.toString(); });
     child.stderr?.on("data", (data) => { output += data.toString(); });
     child.once("error", () => {
       clearTimeout(timeout);
-      finish({ platform: process.platform, latexmkAvailable: false });
+      finish({ platform: process.platform, compilerAvailable: false });
     });
     child.once("close", (code) => {
       clearTimeout(timeout);
       finish({
         platform: process.platform,
-        latexmkAvailable: code === 0,
-        version: code === 0 ? output.split(/\r?\n/).find((line) => /latexmk/i.test(line))?.trim() || "latexmk" : undefined,
+        compilerAvailable: code === 0,
+        version: code === 0 ? output.split(/\r?\n/).find((line) => /(?:pdftex|miktex|latexmk)/i.test(line))?.trim() || (process.platform === "win32" ? "pdfLaTeX" : "latexmk") : undefined,
         installerName: process.platform === "win32" ? "MiKTeX" : undefined,
         installerUrl: process.platform === "win32" ? "https://miktex.org/download" : undefined,
       });
